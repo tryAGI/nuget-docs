@@ -26,6 +26,11 @@ internal sealed class DiffCommand : Command
         Description = "Highlight potentially breaking changes (removed types, removed/changed members)",
         DefaultValueFactory = _ => false,
     };
+    public Option<bool> MemberDiffOption { get; } = new("--member-diff", "-m")
+    {
+        Description = "Show member-level changes (added/removed methods/properties) instead of full source diff",
+        DefaultValueFactory = _ => false,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public DiffCommand() : base("diff", "Compare public API surface between two versions of a package")
@@ -36,6 +41,7 @@ internal sealed class DiffCommand : Command
         Options.Add(FrameworkOption);
         Options.Add(TypeOnlyOption);
         Options.Add(BreakingOption);
+        Options.Add(MemberDiffOption);
         Options.Add(OutputOption);
 
         Action = new DiffCommandAction(this);

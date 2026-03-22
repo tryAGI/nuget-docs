@@ -846,4 +846,111 @@ internal sealed partial class TypeInspector : IDisposable
         string FullName,
         string Name,
         string? MemberKind);
+
+    /// <summary>
+    /// Get public member signatures for a type, for member-level diffing.
+    /// </summary>
+    public IReadOnlyList<MemberSignature> GetMemberSignatures(string typeName)
+    {
+        var fullName = ResolveTypeName(typeName);
+        var ftName = new FullTypeName(fullName);
+        var type = _decompiler.TypeSystem.MainModule.TypeDefinitions
+            .FirstOrDefault(t => t.FullTypeName == ftName);
+
+        if (type is null)
+        {
+            return [];
+        }
+
+        var members = new List<MemberSignature>();
+
+        foreach (var member in type.Members)
+        {
+            if (member.Accessibility != Accessibility.Public &&
+                member.Accessibility != Accessibility.Protected)
+            {
+                continue;
+            }
+
+            var kind = GetMemberKind(member) ?? "Unknown";
+            var signature = FormatMemberSignature(member);
+
+            members.Add(new MemberSignature(
+                Name: member.Name,
+                Kind: kind,
+                Signature: signature));
+        }
+
+        return members.OrderBy(m => m.Kind).ThenBy(m => m.Name).ToList();
+    }
+
+    private static string FormatMemberSignature(IMember member)
+    {
+        var access = member.Accessibility.ToString().ToLowerInvariant();
+        return member switch
+        {
+            IMethod m when m.IsConstructor =>
+                $"{access} {m.DeclaringType.Name}({FormatParameters(m.Parameters)})",
+            IMethod m =>
+                $"{access} {FormatType(m.ReturnType)} {m.Name}{FormatTypeParams(m.TypeParameters)}({FormatParameters(m.Parameters)})",
+            IProperty p when p.IsIndexer =>
+                $"{access} {FormatType(p.ReturnType)} this[{FormatParameters(p.Parameters)}] {{ {PropertyAccessors(p)} }}",
+            IProperty p =>
+                $"{access} {FormatType(p.ReturnType)} {p.Name} {{ {PropertyAccessors(p)} }}",
+            IField f =>
+                $"{access} {FormatType(f.ReturnType)} {f.Name}",
+            IEvent e =>
+                $"{access} event {FormatType(e.ReturnType)} {e.Name}",
+            _ => member.Name,
+        };
+    }
+
+    private static string FormatType(IType type)
+    {
+        // Use ReflectionName which gives clean names without metadata tokens
+        var name = type.ReflectionName;
+
+        // Simplify common System types
+        name = name switch
+        {
+            "System.Void" => "void",
+            "System.String" => "string",
+            "System.Boolean" => "bool",
+            "System.Int32" => "int",
+            "System.Int64" => "long",
+            "System.Double" => "double",
+            "System.Single" => "float",
+            "System.Decimal" => "decimal",
+            "System.Object" => "object",
+            "System.Byte" => "byte",
+            "System.Char" => "char",
+            _ => name,
+        };
+
+        return name;
+    }
+
+    private static string FormatParameters(IReadOnlyList<IParameter> parameters)
+    {
+        return string.Join(", ", parameters.Select(p => $"{FormatType(p.Type)} {p.Name}"));
+    }
+
+    private static string FormatTypeParams(IReadOnlyList<ITypeParameter> typeParams)
+    {
+        if (typeParams.Count == 0) return "";
+        return $"<{string.Join(", ", typeParams.Select(tp => tp.Name))}>";
+    }
+
+    private static string PropertyAccessors(IProperty p)
+    {
+        var parts = new List<string>();
+        if (p.CanGet) parts.Add("get;");
+        if (p.CanSet) parts.Add("set;");
+        return string.Join(" ", parts);
+    }
+
+    public record MemberSignature(
+        string Name,
+        string Kind,
+        string Signature);
 }

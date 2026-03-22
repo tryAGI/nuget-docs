@@ -15,6 +15,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var framework = parseResult.GetValue(command.FrameworkOption);
         var typeOnly = parseResult.GetValue(command.TypeOnlyOption);
         var breakingOnly = parseResult.GetValue(command.BreakingOption);
+        var memberDiff = parseResult.GetValue(command.MemberDiffOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -29,7 +30,6 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             using var toInspector = new TypeInspector(toResolved.DllPath, toResolved.XmlDocPath);
 
             // Use unique key that includes generic arity to avoid collisions
-            // (e.g., JsonConverter and JsonConverter<T> both have FullName "Newtonsoft.Json.JsonConverter")
             static string TypeKey(TypeInspector.TypeInfo t) =>
                 t.GenericParameterCount > 0 ? $"{t.FullName}`{t.GenericParameterCount}" : t.FullName;
 
@@ -57,24 +57,42 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                 }
                 else if (inFrom && inTo && !typeOnly)
                 {
-                    // Both exist — compare decompiled source (skip if --type-only)
+                    // Both exist — compare (skip if --type-only)
                     try
                     {
                         var reflectionName = fromType!.GenericParameterCount > 0
                             ? $"{fromType.FullName}`{fromType.GenericParameterCount}"
                             : fromType.FullName;
-                        var fromSource = fromInspector.DecompileType(reflectionName);
-                        var toSource = toInspector.DecompileType(reflectionName);
 
-                        if (!string.Equals(fromSource, toSource, StringComparison.Ordinal))
+                        if (memberDiff)
                         {
-                            var isBreaking = HasBreakingChanges(fromSource, toSource);
-                            changed.Add(new ChangedType(toType!, fromSource, toSource, isBreaking));
+                            // Member-level comparison
+                            var fromMembers = fromInspector.GetMemberSignatures(reflectionName);
+                            var toMembers = toInspector.GetMemberSignatures(reflectionName);
+                            var memberChanges = CompareMemberSignatures(fromMembers, toMembers);
+
+                            if (memberChanges is not null)
+                            {
+                                var isBreaking = memberChanges.Removed.Count > 0 || memberChanges.Changed.Count > 0;
+                                changed.Add(new ChangedType(toType!, "", "", isBreaking, memberChanges));
+                            }
+                        }
+                        else
+                        {
+                            // Source-level comparison
+                            var fromSource = fromInspector.DecompileType(reflectionName);
+                            var toSource = toInspector.DecompileType(reflectionName);
+
+                            if (!string.Equals(fromSource, toSource, StringComparison.Ordinal))
+                            {
+                                var isBreaking = HasBreakingChanges(fromSource, toSource);
+                                changed.Add(new ChangedType(toType!, fromSource, toSource, isBreaking, null));
+                            }
                         }
                     }
                     catch
                     {
-                        changed.Add(new ChangedType(toType!, "(could not decompile)", "(could not decompile)", false));
+                        changed.Add(new ChangedType(toType!, "(could not decompile)", "(could not decompile)", false, null));
                     }
                 }
             }
@@ -84,16 +102,20 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                 ? changed.Where(c => c.IsBreaking).ToList()
                 : changed;
 
+            // Determine if there are breaking changes for exit code
+            var hasBreaking = removed.Count > 0 || changed.Any(c => c.IsBreaking);
+
             if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
             {
-                OutputJson(package, fromResolved, toResolved, added, removed, filteredChanged, typeOnly, breakingOnly);
+                OutputJson(package, fromResolved, toResolved, added, removed, filteredChanged, typeOnly, breakingOnly, memberDiff);
             }
             else
             {
-                OutputText(package, fromResolved, toResolved, added, removed, filteredChanged, typeOnly, breakingOnly);
+                OutputText(package, fromResolved, toResolved, added, removed, filteredChanged, typeOnly, breakingOnly, memberDiff);
             }
 
-            return 0;
+            // Exit code 2 when breaking changes detected
+            return hasBreaking ? 2 : 0;
         }
         catch (Exception ex)
         {
@@ -103,8 +125,79 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
     }
 
     /// <summary>
+    /// Compare member signatures between two versions of a type.
+    /// Returns null if no changes detected.
+    /// </summary>
+    private static MemberChanges? CompareMemberSignatures(
+        IReadOnlyList<TypeInspector.MemberSignature> fromMembers,
+        IReadOnlyList<TypeInspector.MemberSignature> toMembers)
+    {
+        // Key by signature for exact match
+        var fromByKey = fromMembers.ToDictionary(m => $"{m.Kind}:{m.Signature}");
+        var toByKey = toMembers.ToDictionary(m => $"{m.Kind}:{m.Signature}");
+
+        var addedMembers = new List<TypeInspector.MemberSignature>();
+        var removedMembers = new List<TypeInspector.MemberSignature>();
+
+        // Check for removed/changed members
+        foreach (var (key, member) in fromByKey)
+        {
+            if (!toByKey.ContainsKey(key))
+            {
+                removedMembers.Add(member);
+            }
+        }
+
+        // Check for added members
+        foreach (var (key, member) in toByKey)
+        {
+            if (!fromByKey.ContainsKey(key))
+            {
+                addedMembers.Add(member);
+            }
+        }
+
+        if (addedMembers.Count == 0 && removedMembers.Count == 0)
+        {
+            return null;
+        }
+
+        // Detect signature changes: removed + added with same name = changed
+        var changedMembers = new List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)>();
+        var matchedRemoved = new HashSet<int>();
+        var matchedAdded = new HashSet<int>();
+
+        for (var i = 0; i < removedMembers.Count; i++)
+        {
+            for (var j = 0; j < addedMembers.Count; j++)
+            {
+                if (matchedAdded.Contains(j)) continue;
+
+                if (removedMembers[i].Name == addedMembers[j].Name &&
+                    removedMembers[i].Kind == addedMembers[j].Kind)
+                {
+                    changedMembers.Add((removedMembers[i], addedMembers[j]));
+                    matchedRemoved.Add(i);
+                    matchedAdded.Add(j);
+                    break;
+                }
+            }
+        }
+
+        // Filter out matched items from added/removed
+        var pureRemoved = removedMembers.Where((_, i) => !matchedRemoved.Contains(i)).ToList();
+        var pureAdded = addedMembers.Where((_, i) => !matchedAdded.Contains(i)).ToList();
+
+        if (pureAdded.Count == 0 && pureRemoved.Count == 0 && changedMembers.Count == 0)
+        {
+            return null;
+        }
+
+        return new MemberChanges(pureAdded, pureRemoved, changedMembers);
+    }
+
+    /// <summary>
     /// Detect if changes between two type sources contain breaking changes.
-    /// Breaking = lines removed from old source (member removals, signature changes).
     /// </summary>
     private static bool HasBreakingChanges(string fromSource, string toSource)
     {
@@ -117,15 +210,10 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var toLines = toSource.Split('\n');
         var edits = MyersDiff.Compute(fromLines, toLines);
 
-        // If any lines were deleted, it's potentially breaking
         return edits.Any(e => e.Kind == MyersDiff.EditKind.Delete &&
             IsSignificantLine(e.Line));
     }
 
-    /// <summary>
-    /// Check if a line is significant for breaking change detection.
-    /// Filters out comments, whitespace, attributes, and using statements.
-    /// </summary>
     private static bool IsSignificantLine(string line)
     {
         var trimmed = line.TrimStart();
@@ -154,7 +242,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         List<TypeInspector.TypeInfo> removed,
         List<ChangedType> changed,
         bool typeOnly,
-        bool breakingOnly)
+        bool breakingOnly,
+        bool memberDiff)
     {
         var json = new
         {
@@ -173,15 +262,32 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             removed = removed.Select(t => new { kind = t.Kind, name = t.Name, fullName = t.FullName }),
             changed = typeOnly
                 ? null
-                : changed.Select(c => new
-                {
-                    kind = c.Type.Kind,
-                    name = c.Type.Name,
-                    fullName = c.Type.FullName,
-                    isBreaking = c.IsBreaking,
-                    fromSource = c.FromSource,
-                    toSource = c.ToSource,
-                }),
+                : changed.Select(c => memberDiff && c.Members is not null
+                    ? (object)new
+                    {
+                        kind = c.Type.Kind,
+                        name = c.Type.Name,
+                        fullName = c.Type.FullName,
+                        isBreaking = c.IsBreaking,
+                        addedMembers = c.Members.Added.Select(m => new { m.Kind, m.Name, m.Signature }),
+                        removedMembers = c.Members.Removed.Select(m => new { m.Kind, m.Name, m.Signature }),
+                        changedMembers = c.Members.Changed.Select(m => new
+                        {
+                            kind = m.From.Kind,
+                            name = m.From.Name,
+                            fromSignature = m.From.Signature,
+                            toSignature = m.To.Signature,
+                        }),
+                    }
+                    : new
+                    {
+                        kind = c.Type.Kind,
+                        name = c.Type.Name,
+                        fullName = c.Type.FullName,
+                        isBreaking = c.IsBreaking,
+                        fromSource = c.FromSource,
+                        toSource = c.ToSource,
+                    }),
         };
         Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
     }
@@ -194,7 +300,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         List<TypeInspector.TypeInfo> removed,
         List<ChangedType> changed,
         bool typeOnly,
-        bool breakingOnly)
+        bool breakingOnly,
+        bool memberDiff)
     {
         Console.WriteLine($"// Diff: {package} {fromResolved.Version} → {toResolved.Version}");
         Console.WriteLine($"// Framework: {fromResolved.Framework} → {toResolved.Framework}");
@@ -274,7 +381,11 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                     Console.WriteLine($"=== {c.Type.FullName}{label} ===");
                     Console.WriteLine();
 
-                    if (c.FromSource == "(could not decompile)")
+                    if (memberDiff && c.Members is not null)
+                    {
+                        OutputMemberDiff(c.Members);
+                    }
+                    else if (c.FromSource == "(could not decompile)")
                     {
                         Console.WriteLine("  (could not decompile for comparison)");
                     }
@@ -297,9 +408,44 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         }
     }
 
+    private static void OutputMemberDiff(MemberChanges members)
+    {
+        if (members.Removed.Count > 0)
+        {
+            foreach (var m in members.Removed)
+            {
+                Console.WriteLine($"  - [{m.Kind}] {m.Signature}");
+            }
+        }
+
+        if (members.Added.Count > 0)
+        {
+            foreach (var m in members.Added)
+            {
+                Console.WriteLine($"  + [{m.Kind}] {m.Signature}");
+            }
+        }
+
+        if (members.Changed.Count > 0)
+        {
+            foreach (var (from, to) in members.Changed)
+            {
+                Console.WriteLine($"  ~ [{from.Kind}] {from.Name}:");
+                Console.WriteLine($"    - {from.Signature}");
+                Console.WriteLine($"    + {to.Signature}");
+            }
+        }
+    }
+
     private record ChangedType(
         TypeInspector.TypeInfo Type,
         string FromSource,
         string ToSource,
-        bool IsBreaking);
+        bool IsBreaking,
+        MemberChanges? Members);
+
+    private record MemberChanges(
+        List<TypeInspector.MemberSignature> Added,
+        List<TypeInspector.MemberSignature> Removed,
+        List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> Changed);
 }
