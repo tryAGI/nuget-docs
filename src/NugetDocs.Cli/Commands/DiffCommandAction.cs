@@ -14,6 +14,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var toVersion = parseResult.GetValue(command.ToOption)!;
         var framework = parseResult.GetValue(command.FrameworkOption);
         var typeOnly = parseResult.GetValue(command.TypeOnlyOption);
+        var breakingOnly = parseResult.GetValue(command.BreakingOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -39,7 +40,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
 
             var added = new List<TypeInspector.TypeInfo>();
             var removed = new List<TypeInspector.TypeInfo>();
-            var changed = new List<(TypeInspector.TypeInfo Type, string FromSource, string ToSource)>();
+            var changed = new List<ChangedType>();
 
             foreach (var typeKey in allTypeKeys)
             {
@@ -59,7 +60,6 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                     // Both exist — compare decompiled source (skip if --type-only)
                     try
                     {
-                        // Use reflection name with backtick for generic types
                         var reflectionName = fromType!.GenericParameterCount > 0
                             ? $"{fromType.FullName}`{fromType.GenericParameterCount}"
                             : fromType.FullName;
@@ -68,123 +68,29 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
 
                         if (!string.Equals(fromSource, toSource, StringComparison.Ordinal))
                         {
-                            changed.Add((toType!, fromSource, toSource));
+                            var isBreaking = HasBreakingChanges(fromSource, toSource);
+                            changed.Add(new ChangedType(toType!, fromSource, toSource, isBreaking));
                         }
                     }
                     catch
                     {
-                        // Some nested/complex types can't be decompiled individually —
-                        // mark as changed without source diff
-                        changed.Add((toType!, "(could not decompile)", "(could not decompile)"));
+                        changed.Add(new ChangedType(toType!, "(could not decompile)", "(could not decompile)", false));
                     }
                 }
             }
+
+            // When --breaking is set, filter to only breaking changes
+            var filteredChanged = breakingOnly
+                ? changed.Where(c => c.IsBreaking).ToList()
+                : changed;
 
             if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
             {
-                var json = new
-                {
-                    package,
-                    from = new { version = fromResolved.Version, framework = fromResolved.Framework },
-                    to = new { version = toResolved.Version, framework = toResolved.Framework },
-                    summary = new
-                    {
-                        addedCount = added.Count,
-                        removedCount = removed.Count,
-                        changedCount = changed.Count,
-                    },
-                    added = added.Select(t => new { kind = t.Kind, name = t.Name, fullName = t.FullName }),
-                    removed = removed.Select(t => new { kind = t.Kind, name = t.Name, fullName = t.FullName }),
-                    changed = typeOnly
-                        ? null
-                        : changed.Select(c => new
-                        {
-                            kind = c.Type.Kind,
-                            name = c.Type.Name,
-                            fullName = c.Type.FullName,
-                            fromSource = c.FromSource,
-                            toSource = c.ToSource,
-                        }),
-                };
-                Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
+                OutputJson(package, fromResolved, toResolved, added, removed, filteredChanged, typeOnly, breakingOnly);
             }
             else
             {
-                Console.WriteLine($"// Diff: {package} {fromResolved.Version} → {toResolved.Version}");
-                Console.WriteLine($"// Framework: {fromResolved.Framework} → {toResolved.Framework}");
-                Console.WriteLine();
-
-                if (added.Count == 0 && removed.Count == 0 && changed.Count == 0)
-                {
-                    Console.WriteLine("No public API changes detected.");
-                    return 0;
-                }
-
-                Console.WriteLine($"Summary: +{added.Count} added, -{removed.Count} removed, ~{changed.Count} changed");
-                Console.WriteLine();
-
-                if (added.Count > 0)
-                {
-                    Console.WriteLine("Added:");
-                    foreach (var type in added)
-                    {
-                        Console.WriteLine($"  + [{type.Kind}] {type.FullName}");
-                    }
-                    Console.WriteLine();
-                }
-
-                if (removed.Count > 0)
-                {
-                    Console.WriteLine("Removed:");
-                    foreach (var type in removed)
-                    {
-                        Console.WriteLine($"  - [{type.Kind}] {type.FullName}");
-                    }
-                    Console.WriteLine();
-                }
-
-                if (changed.Count > 0)
-                {
-                    Console.WriteLine("Changed:");
-                    foreach (var (type, _, _) in changed)
-                    {
-                        Console.WriteLine($"  ~ [{type.Kind}] {type.FullName}");
-                    }
-                    Console.WriteLine();
-
-                    // Show detailed diffs (skip if --type-only)
-                    if (!typeOnly)
-                    {
-                        Console.WriteLine("--- Detailed changes ---");
-                        Console.WriteLine();
-
-                        foreach (var (type, fromSource, toSource) in changed)
-                        {
-                            Console.WriteLine($"=== {type.FullName} ===");
-                            Console.WriteLine();
-
-                            if (fromSource == "(could not decompile)")
-                            {
-                                Console.WriteLine("  (could not decompile for comparison)");
-                            }
-                            else
-                            {
-                                // Myers diff for proper ordered output
-                                var fromLines = fromSource.Split('\n');
-                                var toLines = toSource.Split('\n');
-                                var edits = MyersDiff.Compute(fromLines, toLines);
-                                var diffLines = MyersDiff.FormatUnified(edits);
-
-                                foreach (var line in diffLines)
-                                {
-                                    Console.WriteLine(line);
-                                }
-                            }
-
-                            Console.WriteLine();
-                        }
-                    }
-                }
+                OutputText(package, fromResolved, toResolved, added, removed, filteredChanged, typeOnly, breakingOnly);
             }
 
             return 0;
@@ -195,4 +101,205 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             return 1;
         }
     }
+
+    /// <summary>
+    /// Detect if changes between two type sources contain breaking changes.
+    /// Breaking = lines removed from old source (member removals, signature changes).
+    /// </summary>
+    private static bool HasBreakingChanges(string fromSource, string toSource)
+    {
+        if (fromSource == "(could not decompile)")
+        {
+            return false;
+        }
+
+        var fromLines = fromSource.Split('\n');
+        var toLines = toSource.Split('\n');
+        var edits = MyersDiff.Compute(fromLines, toLines);
+
+        // If any lines were deleted, it's potentially breaking
+        return edits.Any(e => e.Kind == MyersDiff.EditKind.Delete &&
+            IsSignificantLine(e.Line));
+    }
+
+    /// <summary>
+    /// Check if a line is significant for breaking change detection.
+    /// Filters out comments, whitespace, attributes, and using statements.
+    /// </summary>
+    private static bool IsSignificantLine(string line)
+    {
+        var trimmed = line.TrimStart();
+
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return false;
+        if (trimmed.StartsWith("///", StringComparison.Ordinal))
+            return false;
+        if (trimmed.StartsWith("//", StringComparison.Ordinal))
+            return false;
+        if (trimmed.StartsWith("using ", StringComparison.Ordinal))
+            return false;
+        if (trimmed.StartsWith("[", StringComparison.Ordinal) && trimmed.EndsWith("]", StringComparison.Ordinal))
+            return false;
+        if (trimmed is "{" or "}" or "")
+            return false;
+
+        return true;
+    }
+
+    private static void OutputJson(
+        string package,
+        PackageResolver.ResolvedPackage fromResolved,
+        PackageResolver.ResolvedPackage toResolved,
+        List<TypeInspector.TypeInfo> added,
+        List<TypeInspector.TypeInfo> removed,
+        List<ChangedType> changed,
+        bool typeOnly,
+        bool breakingOnly)
+    {
+        var json = new
+        {
+            package,
+            from = new { version = fromResolved.Version, framework = fromResolved.Framework },
+            to = new { version = toResolved.Version, framework = toResolved.Framework },
+            breakingOnly,
+            summary = new
+            {
+                addedCount = breakingOnly ? 0 : added.Count,
+                removedCount = removed.Count,
+                changedCount = changed.Count,
+                breakingChangedCount = changed.Count(c => c.IsBreaking),
+            },
+            added = breakingOnly ? null : added.Select(t => new { kind = t.Kind, name = t.Name, fullName = t.FullName }),
+            removed = removed.Select(t => new { kind = t.Kind, name = t.Name, fullName = t.FullName }),
+            changed = typeOnly
+                ? null
+                : changed.Select(c => new
+                {
+                    kind = c.Type.Kind,
+                    name = c.Type.Name,
+                    fullName = c.Type.FullName,
+                    isBreaking = c.IsBreaking,
+                    fromSource = c.FromSource,
+                    toSource = c.ToSource,
+                }),
+        };
+        Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
+    }
+
+    private static void OutputText(
+        string package,
+        PackageResolver.ResolvedPackage fromResolved,
+        PackageResolver.ResolvedPackage toResolved,
+        List<TypeInspector.TypeInfo> added,
+        List<TypeInspector.TypeInfo> removed,
+        List<ChangedType> changed,
+        bool typeOnly,
+        bool breakingOnly)
+    {
+        Console.WriteLine($"// Diff: {package} {fromResolved.Version} → {toResolved.Version}");
+        Console.WriteLine($"// Framework: {fromResolved.Framework} → {toResolved.Framework}");
+        if (breakingOnly)
+        {
+            Console.WriteLine("// Filter: breaking changes only");
+        }
+        Console.WriteLine();
+
+        var showAdded = !breakingOnly && added.Count > 0;
+        var hasChanges = showAdded || removed.Count > 0 || changed.Count > 0;
+
+        if (!hasChanges)
+        {
+            Console.WriteLine(breakingOnly
+                ? "No breaking API changes detected."
+                : "No public API changes detected.");
+            return;
+        }
+
+        // Summary line
+        if (breakingOnly)
+        {
+            Console.WriteLine($"Breaking changes: -{removed.Count} removed, ~{changed.Count} changed with removals");
+        }
+        else
+        {
+            var breakingCount = changed.Count(c => c.IsBreaking);
+            var summaryParts = $"+{added.Count} added, -{removed.Count} removed, ~{changed.Count} changed";
+            if (breakingCount > 0)
+            {
+                summaryParts += $" ({breakingCount} breaking)";
+            }
+            Console.WriteLine($"Summary: {summaryParts}");
+        }
+        Console.WriteLine();
+
+        if (showAdded)
+        {
+            Console.WriteLine("Added:");
+            foreach (var type in added)
+            {
+                Console.WriteLine($"  + [{type.Kind}] {type.FullName}");
+            }
+            Console.WriteLine();
+        }
+
+        if (removed.Count > 0)
+        {
+            Console.WriteLine(breakingOnly ? "Removed (BREAKING):" : "Removed:");
+            foreach (var type in removed)
+            {
+                Console.WriteLine($"  - [{type.Kind}] {type.FullName}");
+            }
+            Console.WriteLine();
+        }
+
+        if (changed.Count > 0)
+        {
+            Console.WriteLine(breakingOnly ? "Changed (BREAKING):" : "Changed:");
+            foreach (var c in changed)
+            {
+                var label = c.IsBreaking ? " ⚠" : "";
+                Console.WriteLine($"  ~ [{c.Type.Kind}] {c.Type.FullName}{label}");
+            }
+            Console.WriteLine();
+
+            // Show detailed diffs (skip if --type-only)
+            if (!typeOnly)
+            {
+                Console.WriteLine("--- Detailed changes ---");
+                Console.WriteLine();
+
+                foreach (var c in changed)
+                {
+                    var label = c.IsBreaking ? " (BREAKING)" : "";
+                    Console.WriteLine($"=== {c.Type.FullName}{label} ===");
+                    Console.WriteLine();
+
+                    if (c.FromSource == "(could not decompile)")
+                    {
+                        Console.WriteLine("  (could not decompile for comparison)");
+                    }
+                    else
+                    {
+                        var fromLines = c.FromSource.Split('\n');
+                        var toLines = c.ToSource.Split('\n');
+                        var edits = MyersDiff.Compute(fromLines, toLines);
+                        var diffLines = MyersDiff.FormatUnified(edits);
+
+                        foreach (var line in diffLines)
+                        {
+                            Console.WriteLine(line);
+                        }
+                    }
+
+                    Console.WriteLine();
+                }
+            }
+        }
+    }
+
+    private record ChangedType(
+        TypeInspector.TypeInfo Type,
+        string FromSource,
+        string ToSource,
+        bool IsBreaking);
 }

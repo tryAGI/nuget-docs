@@ -177,9 +177,29 @@ internal static class MyersDiff
         }
         hunks.Add((hunkStart, hunkEnd));
 
-        // Output each hunk
+        // Output each hunk with @@ headers
         foreach (var (start, end) in hunks)
         {
+            // Compute line numbers for the hunk header
+            // Count old/new lines up to the hunk start to get starting line numbers
+            var oldLine = 1;
+            var newLine = 1;
+            for (var i = 0; i < start; i++)
+            {
+                if (edits[i].Kind != EditKind.Insert) oldLine++;
+                if (edits[i].Kind != EditKind.Delete) newLine++;
+            }
+
+            var oldCount = 0;
+            var newCount = 0;
+            for (var i = start; i < end; i++)
+            {
+                if (edits[i].Kind != EditKind.Insert) oldCount++;
+                if (edits[i].Kind != EditKind.Delete) newCount++;
+            }
+
+            output.Add($"@@ -{oldLine},{oldCount} +{newLine},{newCount} @@");
+
             for (var i = start; i < end; i++)
             {
                 var edit = edits[i];
@@ -191,12 +211,6 @@ internal static class MyersDiff
                     _ => "  ",
                 };
                 output.Add($"{prefix}{line}");
-            }
-
-            // Add separator between hunks
-            if (hunks.Count > 1 && (start, end) != hunks[^1])
-            {
-                output.Add("  ...");
             }
         }
 

@@ -61,10 +61,10 @@ Searches types and members using glob patterns (`*` and `?` wildcards). Results 
 ### Compare API between versions
 
 ```bash
-nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--type-only] [--output json]
+nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--type-only] [--breaking] [--output json]
 ```
 
-Compares the public API surface between two versions of a package. Shows added, removed, and changed types with a unified diff of changes (Myers algorithm). Use `--type-only` (`-t`) for a quick summary of just added/removed types without decompiling sources.
+Compares the public API surface between two versions of a package. Shows added, removed, and changed types with a unified diff (Myers algorithm) including `@@ -line,count +line,count @@` hunk headers. Use `--type-only` (`-t`) for a quick summary without decompiling. Use `--breaking` (`-b`) to show only potentially breaking changes (removed types, removed/changed members).
 
 ### Package metadata
 
@@ -93,6 +93,7 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Assembly namespace filter**: Use `--namespace` with `show --assembly` to filter attributes by their type's namespace (e.g., `--namespace System.Runtime.Versioning`)
 - **API diff**: Use `diff <pkg> --from <v1> --to <v2>` to compare public API between versions — shows added/removed/changed types with unified diff
 - **Quick diff**: Use `--type-only` (`-t`) with `diff` for a fast summary without decompiling — shows only added/removed type names
+- **Breaking changes**: Use `--breaking` (`-b`) with `diff` to filter to only breaking changes (removed types, member removals/signature changes)
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
@@ -156,11 +157,14 @@ nuget-docs show Newtonsoft.Json --assembly --namespace System.Runtime.Versioning
 ### Comparing API between versions
 
 ```bash
-# See what changed between versions (full unified diff)
+# See what changed between versions (full unified diff with hunk headers)
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to 10.4.0
 
 # Quick overview — just added/removed types, no decompilation
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --type-only
+
+# Show only breaking changes (removed types, removed/changed members)
+nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to 10.4.0 --breaking
 
 # Get structured diff output
 nuget-docs diff Newtonsoft.Json --from 13.0.3 --to 13.0.4 --output json
