@@ -31,6 +31,11 @@ internal sealed class DiffCommand : Command
         Description = "Show member-level changes (added/removed methods/properties) instead of full source diff",
         DefaultValueFactory = _ => false,
     };
+    public Option<bool> IncludeAdditiveOption { get; } = new("--include-additive")
+    {
+        Description = "Include purely additive changes (types/members that were only added). When false, shows only removals and modifications for upgrade safety checks",
+        DefaultValueFactory = _ => true,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public DiffCommand() : base("diff", "Compare public API surface between two versions of a package")
@@ -42,6 +47,7 @@ internal sealed class DiffCommand : Command
         Options.Add(TypeOnlyOption);
         Options.Add(BreakingOption);
         Options.Add(MemberDiffOption);
+        Options.Add(IncludeAdditiveOption);
         Options.Add(OutputOption);
 
         Action = new DiffCommandAction(this);

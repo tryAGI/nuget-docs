@@ -184,7 +184,7 @@ internal sealed class PackageResolver
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = "restore --no-build",
+                Arguments = "restore",
                 WorkingDirectory = tmpDir,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

@@ -907,11 +907,35 @@ internal sealed partial class TypeInspector : IDisposable
 
     private static string FormatType(IType type)
     {
-        // Use ReflectionName which gives clean names without metadata tokens
-        var name = type.ReflectionName;
+        // Handle parameterized generic types (Nullable<T>, List<T>, etc.)
+        if (type is ICSharpCode.Decompiler.TypeSystem.ParameterizedType pt)
+        {
+            var genericDef = pt.GenericType.ReflectionName;
 
-        // Simplify common System types
-        name = name switch
+            // Nullable<T> → T?
+            if (genericDef == "System.Nullable`1" && pt.TypeArguments.Count == 1)
+            {
+                return $"{FormatType(pt.TypeArguments[0])}?";
+            }
+
+            // Other generics: format as Name<T1, T2>
+            var baseName = FormatSimpleTypeName(genericDef);
+            // Strip the backtick arity suffix (e.g., "List`1" → "List")
+            var backtickIdx = baseName.IndexOf('`');
+            if (backtickIdx >= 0)
+            {
+                baseName = baseName[..backtickIdx];
+            }
+            var args = string.Join(", ", pt.TypeArguments.Select(FormatType));
+            return $"{baseName}<{args}>";
+        }
+
+        return FormatSimpleTypeName(type.ReflectionName);
+    }
+
+    private static string FormatSimpleTypeName(string name)
+    {
+        return name switch
         {
             "System.Void" => "void",
             "System.String" => "string",
@@ -924,10 +948,15 @@ internal sealed partial class TypeInspector : IDisposable
             "System.Object" => "object",
             "System.Byte" => "byte",
             "System.Char" => "char",
+            "System.Int16" => "short",
+            "System.UInt16" => "ushort",
+            "System.UInt32" => "uint",
+            "System.UInt64" => "ulong",
+            "System.SByte" => "sbyte",
+            "System.IntPtr" => "nint",
+            "System.UIntPtr" => "nuint",
             _ => name,
         };
-
-        return name;
     }
 
     private static string FormatParameters(IReadOnlyList<IParameter> parameters)

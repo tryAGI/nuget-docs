@@ -16,6 +16,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var typeOnly = parseResult.GetValue(command.TypeOnlyOption);
         var breakingOnly = parseResult.GetValue(command.BreakingOption);
         var memberDiff = parseResult.GetValue(command.MemberDiffOption);
+        var includeAdditive = parseResult.GetValue(command.IncludeAdditiveOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -102,16 +103,26 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                 ? changed.Where(c => c.IsBreaking).ToList()
                 : changed;
 
+            // When --include-additive is false, skip purely additive changes
+            var filteredAdded = added;
+            if (!includeAdditive)
+            {
+                filteredAdded = []; // Skip all added types
+                filteredChanged = filteredChanged
+                    .Where(c => c.Members is null || c.Members.Removed.Count > 0 || c.Members.Changed.Count > 0)
+                    .ToList();
+            }
+
             // Determine if there are breaking changes for exit code
             var hasBreaking = removed.Count > 0 || changed.Any(c => c.IsBreaking);
 
             if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
             {
-                OutputJson(package, fromResolved, toResolved, added, removed, filteredChanged, typeOnly, breakingOnly, memberDiff);
+                OutputJson(package, fromResolved, toResolved, filteredAdded, removed, filteredChanged, typeOnly, breakingOnly, memberDiff);
             }
             else
             {
-                OutputText(package, fromResolved, toResolved, added, removed, filteredChanged, typeOnly, breakingOnly, memberDiff);
+                OutputText(package, fromResolved, toResolved, filteredAdded, removed, filteredChanged, typeOnly, breakingOnly, memberDiff);
             }
 
             // Exit code 2 when breaking changes detected
