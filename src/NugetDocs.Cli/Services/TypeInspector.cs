@@ -75,13 +75,15 @@ internal sealed partial class TypeInspector : IDisposable
     }
 
     /// <summary>
-    /// Extract a specific member from decompiled type source by name.
-    /// Returns the member declaration with its XML doc comments.
+    /// Extract all members matching a name from decompiled type source.
+    /// Returns all matching declarations (including overloads) with their XML doc comments.
     /// </summary>
     public static string? ExtractMember(string source, string memberName)
     {
         var lines = source.Split('\n');
+        var linesList = lines.ToList();
         var i = 0;
+        var allMatches = new List<List<string>>();
 
         while (i < lines.Length)
         {
@@ -91,7 +93,6 @@ internal sealed partial class TypeInspector : IDisposable
             if (IsMemberDeclarationContaining(trimmed, memberName))
             {
                 // Collect preceding XML doc comments and attributes
-                var start = i;
                 var docLines = new List<string>();
                 var lookBack = i - 1;
                 while (lookBack >= 0)
@@ -114,20 +115,27 @@ internal sealed partial class TypeInspector : IDisposable
                 }
 
                 // Collect the member body
-                var end = SkipMemberBody(lines.ToList(), i);
+                var end = SkipMemberBody(linesList, i);
                 var memberLines = new List<string>(docLines);
                 for (var j = i; j < end; j++)
                 {
                     memberLines.Add(lines[j]);
                 }
 
-                return string.Join('\n', memberLines);
+                allMatches.Add(memberLines);
+                i = end;
+                continue;
             }
 
             i++;
         }
 
-        return null;
+        if (allMatches.Count == 0)
+        {
+            return null;
+        }
+
+        return string.Join("\n\n", allMatches.Select(m => string.Join('\n', m)));
     }
 
     /// <summary>
@@ -144,6 +152,33 @@ internal sealed partial class TypeInspector : IDisposable
             trimmedLine.StartsWith("using ", StringComparison.Ordinal) ||
             trimmedLine.StartsWith("namespace ", StringComparison.Ordinal) ||
             trimmedLine is "{" or "}" or "")
+        {
+            return false;
+        }
+
+        // Skip statement lines (these are inside method bodies, not declarations)
+        if (trimmedLine.StartsWith("return ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("var ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("if ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("if(", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("else", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("for ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("for(", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("foreach ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("foreach(", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("while ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("while(", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("throw ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("switch ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("switch(", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("case ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("break;", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("continue;", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("yield ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("await ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("try", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("catch", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("finally", StringComparison.Ordinal))
         {
             return false;
         }

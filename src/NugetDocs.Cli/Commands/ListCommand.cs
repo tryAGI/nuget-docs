@@ -12,6 +12,11 @@ internal sealed class ListCommand : Command
         Description = "Show all types including internal (default: public only)",
         DefaultValueFactory = _ => false,
     };
+    public Option<string?> NamespaceOption { get; } = new("--namespace", "-n")
+    {
+        Description = "Filter types by namespace prefix",
+        DefaultValueFactory = _ => null,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public ListCommand() : base("list", "List all public types in a NuGet package")
@@ -20,6 +25,7 @@ internal sealed class ListCommand : Command
         Options.Add(VersionOption);
         Options.Add(FrameworkOption);
         Options.Add(AllOption);
+        Options.Add(NamespaceOption);
         Options.Add(OutputOption);
 
         Action = new ListCommandAction(this);

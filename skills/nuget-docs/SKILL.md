@@ -36,10 +36,10 @@ Use `nuget-docs` when you need to:
 ### List all public types
 
 ```bash
-nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--output json]
+nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--output json]
 ```
 
-Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries. Use `--all` (`-a`) to include internal types.
+Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries. Use `--all` (`-a`) to include internal types. Use `--namespace` (`-n`) to filter by namespace prefix.
 
 ### Show a specific type
 
@@ -77,7 +77,8 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Packages auto-download**: No need to pre-install — packages are fetched from NuGet if not cached
 - **Framework auto-selection**: Picks the best TFM (prefers net10.0 > net9.0 > net8.0 > netstandard2.1 > netstandard2.0)
 - **Public API by default**: `list`, `show`, and `search` strip non-public items — use `--all` to see everything
-- **Member focus**: Use `--member Name` with `show` to extract a single method/property instead of the full type
+- **Member focus**: Use `--member Name` with `show` to extract a single method/property (all overloads) instead of the full type
+- **Namespace filter**: Use `--namespace Prefix` with `list` to show only types in a specific namespace
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
@@ -113,6 +114,16 @@ nuget-docs info Humanizer
 ```bash
 # Show just the GetResponseAsync method signature and docs
 nuget-docs show Microsoft.Extensions.AI.Abstractions IChatClient --member GetResponseAsync
+
+# Show all overloads of SerializeObject
+nuget-docs show Newtonsoft.Json JsonConvert --member SerializeObject
+```
+
+### Filtering by namespace
+
+```bash
+# Show only types in the Linq namespace
+nuget-docs list Newtonsoft.Json --namespace Newtonsoft.Json.Linq
 ```
 
 ### Version-specific inspection
