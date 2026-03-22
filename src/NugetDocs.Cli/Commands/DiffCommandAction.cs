@@ -13,6 +13,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var fromVersion = parseResult.GetValue(command.FromOption)!;
         var toVersion = parseResult.GetValue(command.ToOption)!;
         var framework = parseResult.GetValue(command.FrameworkOption);
+        var typeOnly = parseResult.GetValue(command.TypeOnlyOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -53,9 +54,9 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                 {
                     removed.Add(fromType!);
                 }
-                else if (inFrom && inTo)
+                else if (inFrom && inTo && !typeOnly)
                 {
-                    // Both exist — compare decompiled source
+                    // Both exist — compare decompiled source (skip if --type-only)
                     try
                     {
                         // Use reflection name with backtick for generic types
@@ -94,14 +95,16 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                     },
                     added = added.Select(t => new { kind = t.Kind, name = t.Name, fullName = t.FullName }),
                     removed = removed.Select(t => new { kind = t.Kind, name = t.Name, fullName = t.FullName }),
-                    changed = changed.Select(c => new
-                    {
-                        kind = c.Type.Kind,
-                        name = c.Type.Name,
-                        fullName = c.Type.FullName,
-                        fromSource = c.FromSource,
-                        toSource = c.ToSource,
-                    }),
+                    changed = typeOnly
+                        ? null
+                        : changed.Select(c => new
+                        {
+                            kind = c.Type.Kind,
+                            name = c.Type.Name,
+                            fullName = c.Type.FullName,
+                            fromSource = c.FromSource,
+                            toSource = c.ToSource,
+                        }),
                 };
                 Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
             }
@@ -143,47 +146,43 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                 if (changed.Count > 0)
                 {
                     Console.WriteLine("Changed:");
-                    foreach (var (type, fromSource, toSource) in changed)
+                    foreach (var (type, _, _) in changed)
                     {
                         Console.WriteLine($"  ~ [{type.Kind}] {type.FullName}");
                     }
                     Console.WriteLine();
 
-                    // Show detailed diffs for changed types
-                    Console.WriteLine("--- Detailed changes ---");
-                    Console.WriteLine();
-
-                    foreach (var (type, fromSource, toSource) in changed)
+                    // Show detailed diffs (skip if --type-only)
+                    if (!typeOnly)
                     {
-                        Console.WriteLine($"=== {type.FullName} ===");
+                        Console.WriteLine("--- Detailed changes ---");
                         Console.WriteLine();
 
-                        // Simple line-by-line diff
-                        var fromLines = fromSource.Split('\n');
-                        var toLines = toSource.Split('\n');
-
-                        var fromSet = new HashSet<string>(fromLines.Select(l => l.TrimEnd()));
-                        var toSet = new HashSet<string>(toLines.Select(l => l.TrimEnd()));
-
-                        foreach (var line in fromLines)
+                        foreach (var (type, fromSource, toSource) in changed)
                         {
-                            var trimmed = line.TrimEnd();
-                            if (!toSet.Contains(trimmed) && !string.IsNullOrWhiteSpace(trimmed))
-                            {
-                                Console.WriteLine($"- {trimmed}");
-                            }
-                        }
+                            Console.WriteLine($"=== {type.FullName} ===");
+                            Console.WriteLine();
 
-                        foreach (var line in toLines)
-                        {
-                            var trimmed = line.TrimEnd();
-                            if (!fromSet.Contains(trimmed) && !string.IsNullOrWhiteSpace(trimmed))
+                            if (fromSource == "(could not decompile)")
                             {
-                                Console.WriteLine($"+ {trimmed}");
+                                Console.WriteLine("  (could not decompile for comparison)");
                             }
-                        }
+                            else
+                            {
+                                // Myers diff for proper ordered output
+                                var fromLines = fromSource.Split('\n');
+                                var toLines = toSource.Split('\n');
+                                var edits = MyersDiff.Compute(fromLines, toLines);
+                                var diffLines = MyersDiff.FormatUnified(edits);
 
-                        Console.WriteLine();
+                                foreach (var line in diffLines)
+                                {
+                                    Console.WriteLine(line);
+                                }
+                            }
+
+                            Console.WriteLine();
+                        }
                     }
                 }
             }

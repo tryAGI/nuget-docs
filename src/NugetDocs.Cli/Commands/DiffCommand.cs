@@ -16,6 +16,11 @@ internal sealed class DiffCommand : Command
         Required = true,
     };
     public Option<string?> FrameworkOption { get; } = CommonOptions.Framework;
+    public Option<bool> TypeOnlyOption { get; } = new("--type-only", "-t")
+    {
+        Description = "Show only added/removed/changed type names without detailed source diffs",
+        DefaultValueFactory = _ => false,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public DiffCommand() : base("diff", "Compare public API surface between two versions of a package")
@@ -24,6 +29,7 @@ internal sealed class DiffCommand : Command
         Options.Add(FromOption);
         Options.Add(ToOption);
         Options.Add(FrameworkOption);
+        Options.Add(TypeOnlyOption);
         Options.Add(OutputOption);
 
         Action = new DiffCommandAction(this);
