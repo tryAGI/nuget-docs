@@ -36,6 +36,11 @@ internal sealed class DiffCommand : Command
         Description = "Include purely additive changes (types/members that were only added). When false, shows only removals and modifications for upgrade safety checks",
         DefaultValueFactory = _ => true,
     };
+    public Option<bool> NoAdditiveOption { get; } = new("--no-additive")
+    {
+        Description = "Shorthand for --include-additive false. Hide purely additive changes and show only removals/modifications",
+        DefaultValueFactory = _ => false,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public DiffCommand() : base("diff", "Compare public API surface between two versions of a package")
@@ -48,6 +53,7 @@ internal sealed class DiffCommand : Command
         Options.Add(BreakingOption);
         Options.Add(MemberDiffOption);
         Options.Add(IncludeAdditiveOption);
+        Options.Add(NoAdditiveOption);
         Options.Add(OutputOption);
 
         Action = new DiffCommandAction(this);

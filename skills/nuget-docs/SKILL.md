@@ -61,10 +61,10 @@ Searches types and members using glob patterns (`*` and `?` wildcards). Results 
 ### Compare API between versions
 
 ```bash
-nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--type-only] [--breaking] [--member-diff] [--include-additive false] [--output json]
+nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--type-only] [--breaking] [--member-diff] [--no-additive] [--output json]
 ```
 
-Compares the public API surface between two versions of a package. Shows added, removed, and changed types with a unified diff (Myers algorithm) including `@@ -line,count +line,count @@` hunk headers. Use `--type-only` (`-t`) for a quick summary without decompiling. Use `--breaking` (`-b`) to show only potentially breaking changes. Use `--member-diff` (`-m`) to show structured member-level changes (added/removed/changed methods/properties) instead of full source diff. Use `--include-additive false` to hide purely additive changes and show only removals/modifications for upgrade safety checks. **Exit codes**: 0 = no breaking changes, 1 = error, 2 = breaking changes detected (useful for CI).
+Compares the public API surface between two versions of a package. Shows added, removed, and changed types with a unified diff (Myers algorithm) including `@@ -line,count +line,count @@` hunk headers. Use `--type-only` (`-t`) for a quick summary without decompiling. Use `--breaking` (`-b`) to show only potentially breaking changes. Use `--member-diff` (`-m`) to show structured member-level changes (added/removed/changed methods/properties) instead of full source diff. Use `--no-additive` to hide purely additive changes and show only removals/modifications for upgrade safety checks (also available as `--include-additive false`). Works with both source-level and member-level diffs. **Exit codes**: 0 = no breaking changes, 1 = error, 2 = breaking changes detected (useful for CI).
 
 ### Package metadata
 
@@ -95,7 +95,7 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Quick diff**: Use `--type-only` (`-t`) with `diff` for a fast summary without decompiling — shows only added/removed type names
 - **Breaking changes**: Use `--breaking` (`-b`) with `diff` to filter to only breaking changes (removed types, member removals/signature changes)
 - **Member-level diff**: Use `--member-diff` (`-m`) with `diff` for structured member changes (added/removed/changed methods/properties) instead of full source diff — formats `Nullable<T>` as `T?` and resolves generic type arguments cleanly
-- **Skip additive changes**: Use `--include-additive false` with `diff` to hide purely additive changes (new types, new members) and show only removals/modifications for upgrade safety
+- **Skip additive changes**: Use `--no-additive` with `diff` to hide purely additive changes (new types, additive-only type modifications) and show only removals/modifications — works with both source-level and member-level diffs
 - **CI integration**: `diff` returns exit code 2 when breaking changes are detected (0 = clean, 1 = error)
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
@@ -173,7 +173,7 @@ nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to 10.4.0 -
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --member-diff
 
 # Show only removals/modifications (skip purely additive changes)
-nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --member-diff --include-additive false
+nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --no-additive
 
 # CI usage — exit code 2 means breaking changes detected
 nuget-docs diff MyPackage --from 1.0.0 --to 2.0.0 --type-only || echo "Breaking changes!"

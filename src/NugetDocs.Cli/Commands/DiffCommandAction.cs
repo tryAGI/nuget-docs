@@ -17,6 +17,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var breakingOnly = parseResult.GetValue(command.BreakingOption);
         var memberDiff = parseResult.GetValue(command.MemberDiffOption);
         var includeAdditive = parseResult.GetValue(command.IncludeAdditiveOption);
+        var noAdditive = parseResult.GetValue(command.NoAdditiveOption);
+        if (noAdditive) includeAdditive = false;
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -109,7 +111,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             {
                 filteredAdded = []; // Skip all added types
                 filteredChanged = filteredChanged
-                    .Where(c => c.Members is null || c.Members.Removed.Count > 0 || c.Members.Changed.Count > 0)
+                    .Where(c => !IsPurelyAdditive(c))
                     .ToList();
             }
 
@@ -205,6 +207,31 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         }
 
         return new MemberChanges(pureAdded, pureRemoved, changedMembers);
+    }
+
+    /// <summary>
+    /// Check if a changed type has only additive changes (no removals or modifications).
+    /// Works for both member-diff and source-level diff modes.
+    /// </summary>
+    private static bool IsPurelyAdditive(ChangedType c)
+    {
+        // Member-level diff: purely additive if no removals and no changed signatures
+        if (c.Members is not null)
+        {
+            return c.Members.Removed.Count == 0 && c.Members.Changed.Count == 0;
+        }
+
+        // Source-level diff: purely additive if no significant lines were deleted
+        if (c.FromSource == "(could not decompile)")
+        {
+            return false; // Can't determine, keep it
+        }
+
+        var fromLines = c.FromSource.Split('\n');
+        var toLines = c.ToSource.Split('\n');
+        var edits = MyersDiff.Compute(fromLines, toLines);
+
+        return !edits.Any(e => e.Kind == MyersDiff.EditKind.Delete && IsSignificantLine(e.Line));
     }
 
     /// <summary>
