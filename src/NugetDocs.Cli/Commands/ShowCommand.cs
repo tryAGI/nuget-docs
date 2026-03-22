@@ -11,6 +11,11 @@ internal sealed class ShowCommand : Command
     };
     public Option<string?> VersionOption { get; } = CommonOptions.Version;
     public Option<string?> FrameworkOption { get; } = CommonOptions.Framework;
+    public Option<bool> AllOption { get; } = new("--all", "-a")
+    {
+        Description = "Show all members including private and internal (default: public only)",
+        DefaultValueFactory = _ => false,
+    };
 
     public ShowCommand() : base("show", "Show decompiled source for a specific type with XML documentation")
     {
@@ -18,6 +23,7 @@ internal sealed class ShowCommand : Command
         Arguments.Add(TypeArgument);
         Options.Add(VersionOption);
         Options.Add(FrameworkOption);
+        Options.Add(AllOption);
 
         Action = new ShowCommandAction(this);
     }

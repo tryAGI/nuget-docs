@@ -60,11 +60,11 @@ internal sealed partial class TypeInspector : IDisposable
     /// <summary>
     /// Decompile a specific type to C# source with XML doc comments.
     /// </summary>
-    public string DecompileType(string typeName)
+    public string DecompileType(string typeName, bool publicOnly = true)
     {
         var fullName = ResolveTypeName(typeName);
         var raw = _decompiler.DecompileTypeAsString(new FullTypeName(fullName));
-        return CleanDecompiledOutput(raw);
+        return CleanDecompiledOutput(raw, publicOnly);
     }
 
     /// <summary>
@@ -168,7 +168,7 @@ internal sealed partial class TypeInspector : IDisposable
     /// <summary>
     /// Clean decompiled output by removing compiler-generated noise.
     /// </summary>
-    private static string CleanDecompiledOutput(string source)
+    private static string CleanDecompiledOutput(string source, bool publicOnly)
     {
         // Remove lines containing compiler-generated attributes
         // These are IL-level artifacts that add noise without value
@@ -196,6 +196,12 @@ internal sealed partial class TypeInspector : IDisposable
             cleanedLines.Add(cleaned);
         }
 
+        // Strip non-public members if requested
+        if (publicOnly)
+        {
+            cleanedLines = StripNonPublicMembers(cleanedLines);
+        }
+
         // Remove consecutive blank lines (collapsing gaps from removed lines)
         var result = new List<string>(cleanedLines.Count);
         var lastWasBlank = false;
@@ -214,6 +220,128 @@ internal sealed partial class TypeInspector : IDisposable
         }
 
         return string.Join('\n', result);
+    }
+
+    /// <summary>
+    /// Remove private, internal, and protected internal members from decompiled output.
+    /// Works by detecting member declaration lines and skipping them plus their bodies.
+    /// </summary>
+    private static List<string> StripNonPublicMembers(List<string> lines)
+    {
+        var result = new List<string>(lines.Count);
+        var i = 0;
+
+        while (i < lines.Count)
+        {
+            var trimmed = lines[i].TrimStart();
+
+            // Check if this line (or a preceding XML doc comment block) starts a non-public member
+            if (IsNonPublicMemberDeclaration(trimmed))
+            {
+                // Look back and remove any preceding XML doc comments and attributes for this member
+                while (result.Count > 0)
+                {
+                    var lastTrimmed = result[^1].TrimStart();
+                    if (lastTrimmed.StartsWith("///", StringComparison.Ordinal) ||
+                        lastTrimmed.StartsWith("[", StringComparison.Ordinal) ||
+                        string.IsNullOrWhiteSpace(result[^1]))
+                    {
+                        result.RemoveAt(result.Count - 1);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // Skip this line and its body (brace-matched)
+                i = SkipMemberBody(lines, i);
+                continue;
+            }
+
+            result.Add(lines[i]);
+            i++;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns true if the trimmed line declares a private/internal member.
+    /// </summary>
+    private static bool IsNonPublicMemberDeclaration(string trimmedLine)
+    {
+        // Skip blank lines, comments, attributes, namespace/using, opening/closing braces
+        if (string.IsNullOrWhiteSpace(trimmedLine) ||
+            trimmedLine.StartsWith("///", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("//", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("[", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("using ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("namespace ", StringComparison.Ordinal) ||
+            trimmedLine is "{" or "}" or "")
+        {
+            return false;
+        }
+
+        // Detect access modifiers at the start of member declarations
+        // private, internal, private protected — strip these
+        // public, protected — keep these
+        if (trimmedLine.StartsWith("private ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("internal ", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Private fields: lines like "private readonly string _foo;" or just field with no modifier
+        // inside a class body (indented with tab)
+        // Note: members with no access modifier default to private in C#
+
+        return false;
+    }
+
+    /// <summary>
+    /// Skip from current line past the member body (brace-matched).
+    /// Returns the index of the next line after the member.
+    /// </summary>
+    private static int SkipMemberBody(List<string> lines, int startIndex)
+    {
+        var i = startIndex;
+        var braceDepth = 0;
+        var foundBrace = false;
+
+        while (i < lines.Count)
+        {
+            var line = lines[i];
+
+            foreach (var ch in line)
+            {
+                if (ch == '{')
+                {
+                    braceDepth++;
+                    foundBrace = true;
+                }
+                else if (ch == '}')
+                {
+                    braceDepth--;
+                }
+            }
+
+            i++;
+
+            // If line ends with ; and no braces opened, it's a single-line member (field, etc.)
+            if (!foundBrace && line.TrimEnd().EndsWith(';'))
+            {
+                return i;
+            }
+
+            // If we opened and closed all braces, we're done with the body
+            if (foundBrace && braceDepth <= 0)
+            {
+                return i;
+            }
+        }
+
+        return i;
     }
 
     /// <summary>

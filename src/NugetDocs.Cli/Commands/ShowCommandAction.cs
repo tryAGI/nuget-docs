@@ -12,6 +12,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
         var typeName = parseResult.GetValue(command.TypeArgument)!;
         var version = parseResult.GetValue(command.VersionOption);
         var framework = parseResult.GetValue(command.FrameworkOption);
+        var showAll = parseResult.GetValue(command.AllOption);
 
         try
         {
@@ -23,7 +24,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
             Console.WriteLine($"// Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
             Console.WriteLine();
 
-            var source = inspector.DecompileType(typeName);
+            var source = inspector.DecompileType(typeName, publicOnly: !showAll);
             Console.Write(source);
 
             return 0;

@@ -44,10 +44,10 @@ Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Del
 ### Show a specific type
 
 ```bash
-nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>]
+nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all]
 ```
 
-Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`.
+Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members.
 
 ### Search types and members
 
@@ -76,6 +76,7 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Short names resolve automatically**: `IChatClient` → `Microsoft.Extensions.AI.IChatClient`
 - **Packages auto-download**: No need to pre-install — packages are fetched from NuGet if not cached
 - **Framework auto-selection**: Picks the best TFM (prefers net10.0 > net9.0 > net8.0 > netstandard2.1 > netstandard2.0)
+- **Public API by default**: `show` strips private/internal members and compiler noise — use `--all` to see everything
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
 - **Version pinning**: Use `--version` to inspect a specific version
