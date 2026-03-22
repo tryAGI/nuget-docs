@@ -7,6 +7,7 @@ var rootCommand = new RootCommand("Inspect public API documentation from any NuG
     new ShowCommand(),
     new SearchCommand(),
     new InfoCommand(),
+    new DiffCommand(),
 };
 
 return await rootCommand.Parse(args).InvokeAsync().ConfigureAwait(false);

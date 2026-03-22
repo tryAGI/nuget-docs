@@ -30,6 +30,7 @@ Use `nuget-docs` when you need to:
 - **Find types by pattern** — search across types and members with wildcards
 - **Inspect package metadata** — check dependencies, frameworks, and licensing
 - **Implement against a library** — get full decompiled source with `///` doc comments
+- **Compare API between versions** — identify breaking changes, new types, and modifications
 
 ## Commands
 
@@ -44,10 +45,10 @@ Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Del
 ### Show a specific type
 
 ```bash
-nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--assembly] [--output json]
+nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--assembly] [--namespace <prefix>] [--output json]
 ```
 
-Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members. Use `--member` (`-m`) to show only a specific member. Use `--assembly` to show assembly-level attributes instead of a type.
+Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members. Use `--member` (`-m`) to show only a specific member. Use `--assembly` to show assembly-level attributes instead of a type. Use `--namespace` (`-n`) with `--assembly` to filter attributes by their type's namespace prefix.
 
 ### Search types and members
 
@@ -56,6 +57,14 @@ nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--a
 ```
 
 Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. By default searches only public/protected members; use `--all` (`-a`) to include private and internal. Use `--namespace` (`-n`) to filter by namespace prefix.
+
+### Compare API between versions
+
+```bash
+nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--output json]
+```
+
+Compares the public API surface between two versions of a package. Shows added, removed, and changed types with a line-by-line diff of changes. Useful for identifying breaking changes before upgrading.
 
 ### Package metadata
 
@@ -70,6 +79,7 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 1. **Start broad**: `nuget-docs list <pkg>` to see all public types
 2. **Narrow down**: `nuget-docs search <pkg> "Chat*"` to find types/members matching a pattern
 3. **Deep dive**: `nuget-docs show <pkg> <TypeName>` for full type details
+4. **Compare versions**: `nuget-docs diff <pkg> --from 1.0 --to 2.0` to see what changed
 
 ## Tips for AI Agents
 
@@ -80,6 +90,8 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Member focus**: Use `--member Name` with `show` to extract a single method/property (all overloads) instead of the full type
 - **Namespace filter**: Use `--namespace Prefix` with `list` or `search` to filter by namespace
 - **Assembly attributes**: Use `show <pkg> --assembly` to see `[assembly:]` attributes (TargetFramework, InternalsVisibleTo, etc.)
+- **Assembly namespace filter**: Use `--namespace` with `show --assembly` to filter attributes by their type's namespace (e.g., `--namespace System.Runtime.Versioning`)
+- **API diff**: Use `diff <pkg> --from <v1> --to <v2>` to compare public API between versions — shows added/removed/changed types
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
@@ -135,6 +147,22 @@ nuget-docs search Newtonsoft.Json "*Token*" --namespace Newtonsoft.Json.Linq
 ```bash
 # Check target framework, InternalsVisibleTo, etc.
 nuget-docs show Newtonsoft.Json --assembly
+
+# Filter assembly attributes by namespace
+nuget-docs show Newtonsoft.Json --assembly --namespace System.Runtime.Versioning
+```
+
+### Comparing API between versions
+
+```bash
+# See what changed between versions
+nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to 10.4.0
+
+# Check for breaking changes before upgrading
+nuget-docs diff Newtonsoft.Json --from 13.0.3 --to 13.0.4
+
+# Get structured diff output
+nuget-docs diff Newtonsoft.Json --from 13.0.3 --to 13.0.4 --output json
 ```
 
 ### Version-specific inspection

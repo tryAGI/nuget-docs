@@ -16,6 +16,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
         var showAll = parseResult.GetValue(command.AllOption);
         var memberName = parseResult.GetValue(command.MemberOption);
         var showAssembly = parseResult.GetValue(command.AssemblyOption);
+        var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -28,7 +29,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
             // --assembly mode: show assembly-level attributes
             if (showAssembly)
             {
-                var attrs = inspector.GetAssemblyAttributes();
+                var attrs = inspector.GetAssemblyAttributes(namespaceFilter);
 
                 if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
                 {

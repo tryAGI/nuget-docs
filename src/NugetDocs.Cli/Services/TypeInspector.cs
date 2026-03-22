@@ -77,7 +77,7 @@ internal sealed partial class TypeInspector : IDisposable
     /// <summary>
     /// Get assembly-level attributes from the assembly.
     /// </summary>
-    public IReadOnlyList<string> GetAssemblyAttributes()
+    public IReadOnlyList<string> GetAssemblyAttributes(string? namespaceFilter = null)
     {
         var attrs = new List<string>();
 
@@ -94,6 +94,16 @@ internal sealed partial class TypeInspector : IDisposable
                 or "RefSafetyRulesAttribute")
             {
                 continue;
+            }
+
+            // Apply namespace filter on the attribute type's namespace
+            if (namespaceFilter is not null)
+            {
+                var attrNamespace = attrType.Namespace ?? "";
+                if (!attrNamespace.StartsWith(namespaceFilter, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
             }
 
             var args = attr.FixedArguments;
@@ -340,9 +350,24 @@ internal sealed partial class TypeInspector : IDisposable
     /// </summary>
     public string ResolveTypeName(string typeName)
     {
-        // If it looks like a full name already
+        // If it looks like a full name already (with or without backtick arity)
         if (typeName.Contains('.'))
         {
+            // If it already has backtick notation, use as-is
+            if (typeName.Contains('`'))
+            {
+                return typeName;
+            }
+
+            // Try to find exact match to resolve generic arity
+            var exactMatch = _decompiler.TypeSystem.MainModule.TypeDefinitions
+                .FirstOrDefault(t => string.Equals(t.FullName, typeName, StringComparison.OrdinalIgnoreCase));
+
+            if (exactMatch is not null && exactMatch.TypeParameterCount > 0)
+            {
+                return $"{exactMatch.FullName}`{exactMatch.TypeParameterCount}";
+            }
+
             return typeName;
         }
 

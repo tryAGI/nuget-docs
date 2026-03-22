@@ -27,6 +27,11 @@ internal sealed class ShowCommand : Command
         Description = "Show assembly-level attributes instead of a type",
         DefaultValueFactory = _ => false,
     };
+    public Option<string?> NamespaceOption { get; } = new("--namespace", "-n")
+    {
+        Description = "Filter by namespace prefix (applies to --assembly attribute types)",
+        DefaultValueFactory = _ => null,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public ShowCommand() : base("show", "Show decompiled source for a specific type with XML documentation")
@@ -38,6 +43,7 @@ internal sealed class ShowCommand : Command
         Options.Add(AllOption);
         Options.Add(MemberOption);
         Options.Add(AssemblyOption);
+        Options.Add(NamespaceOption);
         Options.Add(OutputOption);
 
         Action = new ShowCommandAction(this);
