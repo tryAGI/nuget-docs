@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.CommandLine.Invocation;
+using System.Text.Json;
 using NugetDocs.Cli.Services;
 
 namespace NugetDocs.Cli.Commands;
@@ -12,6 +13,8 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
         var pattern = parseResult.GetValue(command.PatternArgument)!;
         var version = parseResult.GetValue(command.VersionOption);
         var framework = parseResult.GetValue(command.FrameworkOption);
+        var showAll = parseResult.GetValue(command.AllOption);
+        var output = parseResult.GetValue(command.OutputOption);
 
         try
         {
@@ -19,20 +22,42 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                 package, version, framework, cancellationToken).ConfigureAwait(false);
 
             using var inspector = new TypeInspector(resolved.DllPath, resolved.XmlDocPath);
-            var results = inspector.SearchTypes(pattern);
+            var results = inspector.SearchTypes(pattern, publicOnly: !showAll);
 
-            Console.WriteLine($"Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
-            Console.WriteLine($"Pattern: {pattern}");
-            Console.WriteLine($"Results: {results.Count}");
-            Console.WriteLine();
-
-            foreach (var result in results)
+            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
             {
-                var kindLabel = result.MemberKind is not null
-                    ? $"{result.Kind}.{result.MemberKind}"
-                    : result.Kind;
+                var json = new
+                {
+                    package = resolved.PackageId,
+                    version = resolved.Version,
+                    framework = resolved.Framework,
+                    pattern,
+                    count = results.Count,
+                    results = results.Select(r => new
+                    {
+                        kind = r.Kind,
+                        memberKind = r.MemberKind,
+                        name = r.Name,
+                        fullName = r.FullName,
+                    }),
+                };
+                Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
+            }
+            else
+            {
+                Console.WriteLine($"Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
+                Console.WriteLine($"Pattern: {pattern}");
+                Console.WriteLine($"Results: {results.Count}");
+                Console.WriteLine();
 
-                Console.WriteLine($"  [{kindLabel}] {result.FullName}");
+                foreach (var result in results)
+                {
+                    var kindLabel = result.MemberKind is not null
+                        ? $"{result.Kind}.{result.MemberKind}"
+                        : result.Kind;
+
+                    Console.WriteLine($"  [{kindLabel}] {result.FullName}");
+                }
             }
 
             return 0;

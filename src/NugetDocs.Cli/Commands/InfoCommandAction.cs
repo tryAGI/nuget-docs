@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.CommandLine.Invocation;
+using System.Text.Json;
 using System.Xml.Linq;
 using NugetDocs.Cli.Services;
 
@@ -11,6 +12,7 @@ internal sealed class InfoCommandAction(InfoCommand command) : AsynchronousComma
     {
         var package = parseResult.GetValue(command.PackageArgument)!;
         var version = parseResult.GetValue(command.VersionOption);
+        var output = parseResult.GetValue(command.OutputOption);
 
         try
         {
@@ -35,83 +37,83 @@ internal sealed class InfoCommandAction(InfoCommand command) : AsynchronousComma
                 return 1;
             }
 
-            Console.WriteLine($"Package: {GetValue(metadata, ns, "id")}");
-            Console.WriteLine($"Version: {GetValue(metadata, ns, "version")}");
-            Console.WriteLine($"Authors: {GetValue(metadata, ns, "authors")}");
-            Console.WriteLine($"Description: {GetValue(metadata, ns, "description")}");
-
-            var license = GetValue(metadata, ns, "license");
-            var licenseUrl = GetValue(metadata, ns, "licenseUrl");
-            if (license is not null)
-            {
-                Console.WriteLine($"License: {license}");
-            }
-            else if (licenseUrl is not null)
-            {
-                Console.WriteLine($"License URL: {licenseUrl}");
-            }
-
-            var projectUrl = GetValue(metadata, ns, "projectUrl");
-            if (projectUrl is not null)
-            {
-                Console.WriteLine($"Project URL: {projectUrl}");
-            }
-
-            var tags = GetValue(metadata, ns, "tags");
-            if (tags is not null)
-            {
-                Console.WriteLine($"Tags: {tags}");
-            }
-
-            // List target frameworks
+            // Collect frameworks
             var libDir = Path.Combine(resolved.PackageDir, "lib");
-            if (Directory.Exists(libDir))
-            {
-                var tfms = Directory.GetDirectories(libDir)
+            var tfms = Directory.Exists(libDir)
+                ? Directory.GetDirectories(libDir)
                     .Select(Path.GetFileName)
                     .Where(n => n is not null)
-                    .ToList();
+                    .ToList()
+                : [];
+
+            // Collect dependencies
+            var dependencies = metadata.Element(ns + "dependencies");
+            var depData = CollectDependencies(dependencies, ns);
+
+            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+            {
+                var json = new
+                {
+                    id = GetValue(metadata, ns, "id"),
+                    version = GetValue(metadata, ns, "version"),
+                    authors = GetValue(metadata, ns, "authors"),
+                    description = GetValue(metadata, ns, "description"),
+                    license = GetValue(metadata, ns, "license"),
+                    licenseUrl = GetValue(metadata, ns, "licenseUrl"),
+                    projectUrl = GetValue(metadata, ns, "projectUrl"),
+                    tags = GetValue(metadata, ns, "tags"),
+                    frameworks = tfms,
+                    dependencies = depData,
+                };
+                Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
+            }
+            else
+            {
+                Console.WriteLine($"Package: {GetValue(metadata, ns, "id")}");
+                Console.WriteLine($"Version: {GetValue(metadata, ns, "version")}");
+                Console.WriteLine($"Authors: {GetValue(metadata, ns, "authors")}");
+                Console.WriteLine($"Description: {GetValue(metadata, ns, "description")}");
+
+                var license = GetValue(metadata, ns, "license");
+                var licenseUrl = GetValue(metadata, ns, "licenseUrl");
+                if (license is not null)
+                {
+                    Console.WriteLine($"License: {license}");
+                }
+                else if (licenseUrl is not null)
+                {
+                    Console.WriteLine($"License URL: {licenseUrl}");
+                }
+
+                var projectUrl = GetValue(metadata, ns, "projectUrl");
+                if (projectUrl is not null)
+                {
+                    Console.WriteLine($"Project URL: {projectUrl}");
+                }
+
+                var tags = GetValue(metadata, ns, "tags");
+                if (tags is not null)
+                {
+                    Console.WriteLine($"Tags: {tags}");
+                }
 
                 if (tfms.Count > 0)
                 {
                     Console.WriteLine($"Frameworks: {string.Join(", ", tfms)}");
                 }
-            }
 
-            // Dependencies
-            var dependencies = metadata.Element(ns + "dependencies");
-            if (dependencies is not null)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Dependencies:");
-
-                var groups = dependencies.Elements(ns + "group").ToList();
-                if (groups.Count > 0)
+                if (depData.Count > 0)
                 {
-                    foreach (var group in groups)
+                    Console.WriteLine();
+                    Console.WriteLine("Dependencies:");
+
+                    foreach (var (tfm, deps) in depData)
                     {
-                        var tfm = group.Attribute("targetFramework")?.Value ?? "any";
-                        var deps = group.Elements(ns + "dependency").ToList();
-                        if (deps.Count > 0)
+                        Console.WriteLine($"  {tfm}:");
+                        foreach (var dep in deps)
                         {
-                            Console.WriteLine($"  {tfm}:");
-                            foreach (var dep in deps)
-                            {
-                                var depId = dep.Attribute("id")?.Value;
-                                var depVer = dep.Attribute("version")?.Value;
-                                Console.WriteLine($"    {depId} {depVer}");
-                            }
+                            Console.WriteLine($"    {dep.Id} {dep.Version}");
                         }
-                    }
-                }
-                else
-                {
-                    // Flat dependency list
-                    foreach (var dep in dependencies.Elements(ns + "dependency"))
-                    {
-                        var depId = dep.Attribute("id")?.Value;
-                        var depVer = dep.Attribute("version")?.Value;
-                        Console.WriteLine($"  {depId} {depVer}");
                     }
                 }
             }
@@ -125,9 +127,53 @@ internal sealed class InfoCommandAction(InfoCommand command) : AsynchronousComma
         }
     }
 
+    private static Dictionary<string, List<DepInfo>> CollectDependencies(XElement? dependencies, XNamespace ns)
+    {
+        var result = new Dictionary<string, List<DepInfo>>();
+
+        if (dependencies is null)
+        {
+            return result;
+        }
+
+        var groups = dependencies.Elements(ns + "group").ToList();
+        if (groups.Count > 0)
+        {
+            foreach (var group in groups)
+            {
+                var tfm = group.Attribute("targetFramework")?.Value ?? "any";
+                var deps = group.Elements(ns + "dependency")
+                    .Select(d => new DepInfo(
+                        d.Attribute("id")?.Value ?? "",
+                        d.Attribute("version")?.Value ?? ""))
+                    .ToList();
+                if (deps.Count > 0)
+                {
+                    result[tfm] = deps;
+                }
+            }
+        }
+        else
+        {
+            var deps = dependencies.Elements(ns + "dependency")
+                .Select(d => new DepInfo(
+                    d.Attribute("id")?.Value ?? "",
+                    d.Attribute("version")?.Value ?? ""))
+                .ToList();
+            if (deps.Count > 0)
+            {
+                result["any"] = deps;
+            }
+        }
+
+        return result;
+    }
+
     private static string? GetValue(XElement parent, XNamespace ns, string name)
     {
         var value = parent.Element(ns + name)?.Value?.Trim();
         return string.IsNullOrEmpty(value) ? null : value;
     }
+
+    private record DepInfo(string Id, string Version);
 }

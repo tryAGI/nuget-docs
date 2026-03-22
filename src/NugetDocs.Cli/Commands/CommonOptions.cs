@@ -25,4 +25,12 @@ internal static class CommonOptions
         Description = "Target framework moniker (default: auto-select best)",
         DefaultValueFactory = _ => null,
     };
+
+    public static Option<string?> Output => new(
+        name: "--output",
+        aliases: ["-o"])
+    {
+        Description = "Output format: text (default) or json",
+        DefaultValueFactory = _ => null,
+    };
 }

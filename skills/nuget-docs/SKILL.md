@@ -36,7 +36,7 @@ Use `nuget-docs` when you need to:
 ### List all public types
 
 ```bash
-nuget-docs list <Package> [--version <ver>] [--framework <tfm>]
+nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--output json]
 ```
 
 Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries.
@@ -44,7 +44,7 @@ Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Del
 ### Show a specific type
 
 ```bash
-nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all]
+nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--output json]
 ```
 
 Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members.
@@ -52,15 +52,15 @@ Decompiles the full type to C# source with `///` XML documentation comments. **S
 ### Search types and members
 
 ```bash
-nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>]
+nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--output json]
 ```
 
-Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels.
+Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. By default searches only public/protected members; use `--all` (`-a`) to include private and internal.
 
 ### Package metadata
 
 ```bash
-nuget-docs info <Package> [--version <ver>]
+nuget-docs info <Package> [--version <ver>] [--output json]
 ```
 
 Shows package ID, version, authors, description, license, frameworks, and dependencies.
@@ -76,7 +76,8 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Short names resolve automatically**: `IChatClient` → `Microsoft.Extensions.AI.IChatClient`
 - **Packages auto-download**: No need to pre-install — packages are fetched from NuGet if not cached
 - **Framework auto-selection**: Picks the best TFM (prefers net10.0 > net9.0 > net8.0 > netstandard2.1 > netstandard2.0)
-- **Public API by default**: `show` strips private/internal members and compiler noise — use `--all` to see everything
+- **Public API by default**: `show` and `search` strip private/internal members — use `--all` to see everything
+- **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
 - **Version pinning**: Use `--version` to inspect a specific version

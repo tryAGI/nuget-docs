@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.CommandLine.Invocation;
+using System.Text.Json;
 using NugetDocs.Cli.Services;
 
 namespace NugetDocs.Cli.Commands;
@@ -13,6 +14,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
         var version = parseResult.GetValue(command.VersionOption);
         var framework = parseResult.GetValue(command.FrameworkOption);
         var showAll = parseResult.GetValue(command.AllOption);
+        var output = parseResult.GetValue(command.OutputOption);
 
         try
         {
@@ -20,12 +22,27 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
                 package, version, framework, cancellationToken).ConfigureAwait(false);
 
             using var inspector = new TypeInspector(resolved.DllPath, resolved.XmlDocPath);
-
-            Console.WriteLine($"// Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
-            Console.WriteLine();
-
             var source = inspector.DecompileType(typeName, publicOnly: !showAll);
-            Console.Write(source);
+
+            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+            {
+                var resolvedName = inspector.ResolveTypeName(typeName);
+                var json = new
+                {
+                    package = resolved.PackageId,
+                    version = resolved.Version,
+                    framework = resolved.Framework,
+                    typeName = resolvedName,
+                    source,
+                };
+                Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
+            }
+            else
+            {
+                Console.WriteLine($"// Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
+                Console.WriteLine();
+                Console.Write(source);
+            }
 
             return 0;
         }

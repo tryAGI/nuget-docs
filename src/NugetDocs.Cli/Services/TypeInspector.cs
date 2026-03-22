@@ -70,7 +70,7 @@ internal sealed partial class TypeInspector : IDisposable
     /// <summary>
     /// Search types and members by pattern (glob-like: * matches any).
     /// </summary>
-    public IReadOnlyList<SearchResult> SearchTypes(string pattern)
+    public IReadOnlyList<SearchResult> SearchTypes(string pattern, bool publicOnly = true)
     {
         var results = new List<SearchResult>();
         var regex = GlobToRegex(pattern);
@@ -95,7 +95,8 @@ internal sealed partial class TypeInspector : IDisposable
             // Search members
             foreach (var member in type.Members)
             {
-                if (member.Accessibility != Accessibility.Public)
+                if (publicOnly && member.Accessibility != Accessibility.Public &&
+                    member.Accessibility != Accessibility.Protected)
                 {
                     continue;
                 }
