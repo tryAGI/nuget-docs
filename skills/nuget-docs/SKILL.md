@@ -44,18 +44,18 @@ Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Del
 ### Show a specific type
 
 ```bash
-nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--output json]
+nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--assembly] [--output json]
 ```
 
-Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members. Use `--member` (`-m`) to show only a specific member.
+Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members. Use `--member` (`-m`) to show only a specific member. Use `--assembly` to show assembly-level attributes instead of a type.
 
 ### Search types and members
 
 ```bash
-nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--output json]
+nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--output json]
 ```
 
-Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. By default searches only public/protected members; use `--all` (`-a`) to include private and internal.
+Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. By default searches only public/protected members; use `--all` (`-a`) to include private and internal. Use `--namespace` (`-n`) to filter by namespace prefix.
 
 ### Package metadata
 
@@ -78,7 +78,8 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Framework auto-selection**: Picks the best TFM (prefers net10.0 > net9.0 > net8.0 > netstandard2.1 > netstandard2.0)
 - **Public API by default**: `list`, `show`, and `search` strip non-public items — use `--all` to see everything
 - **Member focus**: Use `--member Name` with `show` to extract a single method/property (all overloads) instead of the full type
-- **Namespace filter**: Use `--namespace Prefix` with `list` to show only types in a specific namespace
+- **Namespace filter**: Use `--namespace Prefix` with `list` or `search` to filter by namespace
+- **Assembly attributes**: Use `show <pkg> --assembly` to see `[assembly:]` attributes (TargetFramework, InternalsVisibleTo, etc.)
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
@@ -124,6 +125,16 @@ nuget-docs show Newtonsoft.Json JsonConvert --member SerializeObject
 ```bash
 # Show only types in the Linq namespace
 nuget-docs list Newtonsoft.Json --namespace Newtonsoft.Json.Linq
+
+# Search within a namespace
+nuget-docs search Newtonsoft.Json "*Token*" --namespace Newtonsoft.Json.Linq
+```
+
+### Assembly-level attributes
+
+```bash
+# Check target framework, InternalsVisibleTo, etc.
+nuget-docs show Newtonsoft.Json --assembly
 ```
 
 ### Version-specific inspection

@@ -14,6 +14,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
         var version = parseResult.GetValue(command.VersionOption);
         var framework = parseResult.GetValue(command.FrameworkOption);
         var showAll = parseResult.GetValue(command.AllOption);
+        var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -22,7 +23,11 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                 package, version, framework, cancellationToken).ConfigureAwait(false);
 
             using var inspector = new TypeInspector(resolved.DllPath, resolved.XmlDocPath);
-            var results = inspector.SearchTypes(pattern, publicOnly: !showAll);
+            var allResults = inspector.SearchTypes(pattern, publicOnly: !showAll);
+
+            var results = namespaceFilter is not null
+                ? allResults.Where(r => r.FullName.StartsWith(namespaceFilter, StringComparison.OrdinalIgnoreCase)).ToList()
+                : allResults;
 
             if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
             {

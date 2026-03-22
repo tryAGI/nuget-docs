@@ -16,6 +16,11 @@ internal sealed class SearchCommand : Command
         Description = "Search all members including private and internal (default: public only)",
         DefaultValueFactory = _ => false,
     };
+    public Option<string?> NamespaceOption { get; } = new("--namespace", "-n")
+    {
+        Description = "Filter results by namespace prefix",
+        DefaultValueFactory = _ => null,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public SearchCommand() : base("search", "Search types and members by pattern")
@@ -25,6 +30,7 @@ internal sealed class SearchCommand : Command
         Options.Add(VersionOption);
         Options.Add(FrameworkOption);
         Options.Add(AllOption);
+        Options.Add(NamespaceOption);
         Options.Add(OutputOption);
 
         Action = new SearchCommandAction(this);

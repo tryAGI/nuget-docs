@@ -75,6 +75,66 @@ internal sealed partial class TypeInspector : IDisposable
     }
 
     /// <summary>
+    /// Get assembly-level attributes from the assembly.
+    /// </summary>
+    public IReadOnlyList<string> GetAssemblyAttributes()
+    {
+        var attrs = new List<string>();
+
+        foreach (var attr in _decompiler.TypeSystem.MainModule.GetAssemblyAttributes())
+        {
+            var attrType = attr.AttributeType;
+            var name = attrType.Name;
+            var fullName = attrType.FullName;
+
+            // Skip compiler noise attributes
+            if (name is "CompilationRelaxationsAttribute" or "RuntimeCompatibilityAttribute"
+                or "DebuggableAttribute" or "CompilerGeneratedAttribute"
+                or "NullableContextAttribute" or "NullableAttribute"
+                or "RefSafetyRulesAttribute")
+            {
+                continue;
+            }
+
+            var args = attr.FixedArguments;
+            var namedArgs = attr.NamedArguments;
+
+            var parts = new List<string>();
+            foreach (var arg in args)
+            {
+                parts.Add(FormatAttributeArg(arg.Value));
+            }
+            foreach (var arg in namedArgs)
+            {
+                parts.Add($"{arg.Name} = {FormatAttributeArg(arg.Value)}");
+            }
+
+            var shortName = name.EndsWith("Attribute", StringComparison.Ordinal)
+                ? name[..^"Attribute".Length]
+                : name;
+
+            var line = parts.Count > 0
+                ? $"[assembly: {shortName}({string.Join(", ", parts)})]"
+                : $"[assembly: {shortName}]";
+
+            attrs.Add(line);
+        }
+
+        return attrs;
+    }
+
+    private static string FormatAttributeArg(object? value)
+    {
+        return value switch
+        {
+            string s => $"\"{s}\"",
+            bool b => b ? "true" : "false",
+            null => "null",
+            _ => value.ToString() ?? "",
+        };
+    }
+
+    /// <summary>
     /// Extract all members matching a name from decompiled type source.
     /// Returns all matching declarations (including overloads) with their XML doc comments.
     /// </summary>

@@ -8,6 +8,7 @@ internal sealed class ShowCommand : Command
     public Argument<string> TypeArgument { get; } = new("type")
     {
         Description = "Type name (short name like IChatClient or full name)",
+        Arity = ArgumentArity.ZeroOrOne,
     };
     public Option<string?> VersionOption { get; } = CommonOptions.Version;
     public Option<string?> FrameworkOption { get; } = CommonOptions.Framework;
@@ -21,6 +22,11 @@ internal sealed class ShowCommand : Command
         Description = "Show only a specific member (method, property, etc.) by name",
         DefaultValueFactory = _ => null,
     };
+    public Option<bool> AssemblyOption { get; } = new("--assembly")
+    {
+        Description = "Show assembly-level attributes instead of a type",
+        DefaultValueFactory = _ => false,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public ShowCommand() : base("show", "Show decompiled source for a specific type with XML documentation")
@@ -31,6 +37,7 @@ internal sealed class ShowCommand : Command
         Options.Add(FrameworkOption);
         Options.Add(AllOption);
         Options.Add(MemberOption);
+        Options.Add(AssemblyOption);
         Options.Add(OutputOption);
 
         Action = new ShowCommandAction(this);
