@@ -1,4 +1,4 @@
-using System.Text;
+using System.Text.RegularExpressions;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.Metadata;
@@ -9,7 +9,7 @@ namespace NugetDocs.Cli.Services;
 /// <summary>
 /// ILSpy-based type inspection and decompilation.
 /// </summary>
-internal sealed class TypeInspector : IDisposable
+internal sealed partial class TypeInspector : IDisposable
 {
     private readonly CSharpDecompiler _decompiler;
     private readonly PEFile _peFile;
@@ -18,20 +18,18 @@ internal sealed class TypeInspector : IDisposable
     {
         _peFile = new PEFile(dllPath);
 
-        var settings = new DecompilerSettings(LanguageVersion.CSharp1)
+        // Use default constructor — enables all modern C# features by default
+        // (auto-properties, records, pattern matching, async/await, etc.)
+        var settings = new DecompilerSettings
         {
             ThrowOnAssemblyResolveErrors = false,
             AlwaysQualifyMemberReferences = false,
             ShowXmlDocumentation = xmlDocPath is not null,
+            FileScopedNamespaces = false, // traditional namespaces are easier to parse
         };
-
-        // Let ILSpy auto-detect the best language version
-        settings.SetLanguageVersion(LanguageVersion.Latest);
 
         _decompiler = new CSharpDecompiler(_peFile, new UniversalAssemblyResolver(
             dllPath, false, _peFile.DetectTargetFrameworkId()), settings);
-
-        // If XML doc path exists alongside the DLL, ILSpy picks it up automatically
     }
 
     /// <summary>
@@ -65,8 +63,8 @@ internal sealed class TypeInspector : IDisposable
     public string DecompileType(string typeName)
     {
         var fullName = ResolveTypeName(typeName);
-        var result = _decompiler.DecompileTypeAsString(new FullTypeName(fullName));
-        return result;
+        var raw = _decompiler.DecompileTypeAsString(new FullTypeName(fullName));
+        return CleanDecompiledOutput(raw);
     }
 
     /// <summary>
@@ -132,16 +130,236 @@ internal sealed class TypeInspector : IDisposable
                 string.Equals(t.Name, typeName, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        return matches.Count switch
+        if (matches.Count == 0)
         {
-            0 => throw new InvalidOperationException(
-                $"Type '{typeName}' not found in this package."),
-            1 => matches[0].FullName,
-            _ => throw new InvalidOperationException(
-                $"Ambiguous type name '{typeName}'. Candidates:\n" +
-                string.Join("\n", matches.Select(m => $"  {m.FullName}"))),
-        };
+            throw new InvalidOperationException(
+                $"Type '{typeName}' not found in this package.");
+        }
+
+        if (matches.Count == 1)
+        {
+            return matches[0].FullName;
+        }
+
+        // For generic arity variants (e.g., IEmbeddingGenerator and IEmbeddingGenerator<,>),
+        // prefer the most-generic version (highest type parameter count)
+        var allSameBaseName = matches.All(m =>
+            string.Equals(m.Name, matches[0].Name, StringComparison.OrdinalIgnoreCase));
+
+        if (allSameBaseName)
+        {
+            return matches.OrderByDescending(m => m.TypeParameterCount).First().FullName;
+        }
+
+        // Truly ambiguous — show candidates with arity info
+        var candidates = matches.Select(m =>
+        {
+            var arity = m.TypeParameterCount > 0
+                ? $"<{new string(',', m.TypeParameterCount - 1)}>"
+                : "";
+            return $"  {m.FullName}{arity}";
+        });
+
+        throw new InvalidOperationException(
+            $"Ambiguous type name '{typeName}'. Candidates:\n" +
+            string.Join("\n", candidates));
     }
+
+    /// <summary>
+    /// Clean decompiled output by removing compiler-generated noise.
+    /// </summary>
+    private static string CleanDecompiledOutput(string source)
+    {
+        // Remove lines containing compiler-generated attributes
+        // These are IL-level artifacts that add noise without value
+        var lines = source.Split('\n');
+        var cleanedLines = new List<string>(lines.Length);
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.TrimStart();
+
+            // Skip lines that are purely compiler-generated attributes
+            if (IsNoiseAttributeLine(trimmed))
+            {
+                continue;
+            }
+
+            // Skip using statements for compiler-infrastructure namespaces
+            if (IsNoiseUsingLine(trimmed))
+            {
+                continue;
+            }
+
+            // Clean inline attribute noise from remaining lines
+            var cleaned = CleanInlineAttributes(line);
+            cleanedLines.Add(cleaned);
+        }
+
+        // Remove consecutive blank lines (collapsing gaps from removed lines)
+        var result = new List<string>(cleanedLines.Count);
+        var lastWasBlank = false;
+
+        foreach (var line in cleanedLines)
+        {
+            var isBlank = string.IsNullOrWhiteSpace(line);
+
+            if (isBlank && lastWasBlank)
+            {
+                continue;
+            }
+
+            result.Add(line);
+            lastWasBlank = isBlank;
+        }
+
+        return string.Join('\n', result);
+    }
+
+    /// <summary>
+    /// Returns true if the line is a standalone noise attribute that should be removed entirely.
+    /// </summary>
+    private static bool IsNoiseAttributeLine(string trimmedLine)
+    {
+        // [NullableContext(N)]
+        if (trimmedLine.StartsWith("[NullableContext(", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // [Nullable(N)] or [Nullable(new byte[] { ... })]
+        if (trimmedLine.StartsWith("[Nullable(", StringComparison.Ordinal) &&
+            !trimmedLine.StartsWith("[NullablePublic", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // [IsReadOnly] — emitted for readonly structs (C# already says "readonly struct")
+        if (trimmedLine is "[IsReadOnly]")
+        {
+            return true;
+        }
+
+        // [CompilerGenerated] — on backing fields, accessors
+        if (trimmedLine is "[CompilerGenerated]")
+        {
+            return true;
+        }
+
+        // [DebuggerDisplay(...)] / [DebuggerBrowsable(...)] — debugger hints
+        if (trimmedLine.StartsWith("[DebuggerDisplay(", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("[DebuggerBrowsable(", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // [Extension] — emitted on static classes containing extension methods
+        if (trimmedLine is "[Extension]")
+        {
+            return true;
+        }
+
+        // [StructLayout(...)] with Sequential — default for structs, noise
+        if (trimmedLine.StartsWith("[StructLayout(", StringComparison.Ordinal) &&
+            trimmedLine.Contains("LayoutKind.Sequential", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // [DefaultMember("Item")] — emitted for indexers (already implied by this[] syntax)
+        if (trimmedLine.StartsWith("[DefaultMember(", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns true if the line is a using statement for compiler-infrastructure namespaces.
+    /// </summary>
+    private static bool IsNoiseUsingLine(string trimmedLine)
+    {
+        if (!trimmedLine.StartsWith("using ", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return trimmedLine is "using System.Runtime.CompilerServices;"
+            or "using System.Diagnostics;"
+            or "using System.Diagnostics.CodeAnalysis;"
+            or "using System.Runtime.InteropServices;"
+            or "using System.ComponentModel;"
+            or "using System.Runtime.Versioning;";
+    }
+
+    /// <summary>
+    /// Clean inline attribute noise from parameter/return/property declarations.
+    /// </summary>
+    private static string CleanInlineAttributes(string line)
+    {
+        // Remove [Nullable(N)] and [Nullable(new byte[] {...})] inline
+        var cleaned = NullableInlineRegex().Replace(line, "");
+
+        // Remove [NullableContext(N)] inline
+        cleaned = NullableContextInlineRegex().Replace(cleaned, "");
+
+        // Remove [param: Nullable(...)] / [return: Nullable(...)] / [param: AllowNull]
+        cleaned = ParamReturnNullableRegex().Replace(cleaned, "");
+
+        // Remove [CompilerGenerated] inline (on getters/setters)
+        cleaned = CompilerGeneratedInlineRegex().Replace(cleaned, "");
+
+        // Remove [DebuggerBrowsable(...)] inline
+        cleaned = DebuggerBrowsableInlineRegex().Replace(cleaned, "");
+
+        // Remove [MaybeNull] / [NotNull] / [NotNullWhen(...)] / [MaybeNullWhen(...)] / [AllowNull] / [DisallowNull]
+        // These are nullability contract attributes — already expressed via ? syntax
+        cleaned = NullabilityContractInlineRegex().Replace(cleaned, "");
+
+        // Replace <PropertyName>k__BackingField with PropertyName
+        // These appear when ILSpy can't fully reconstruct auto-properties
+        cleaned = BackingFieldRegex().Replace(cleaned, "$1");
+
+        // Replace base..ctor() and this..ctor() with base() and this()
+        cleaned = cleaned
+            .Replace("base..ctor()", "base()", StringComparison.Ordinal)
+            .Replace("this..ctor(", "this(", StringComparison.Ordinal);
+
+        // Clean up any double spaces left behind
+        cleaned = MultiSpaceRegex().Replace(cleaned, " ");
+
+        // Clean up empty attribute brackets [] that might be left
+        cleaned = cleaned.Replace("[] ", "", StringComparison.Ordinal);
+
+        return cleaned;
+    }
+
+    // Regex patterns for inline attribute removal
+
+    [GeneratedRegex(@"\[Nullable\([^)]*\)\]\s*")]
+    private static partial Regex NullableInlineRegex();
+
+    [GeneratedRegex(@"\[NullableContext\(\d+\)\]\s*")]
+    private static partial Regex NullableContextInlineRegex();
+
+    [GeneratedRegex(@"\[(param|return|field):\s*(Nullable\([^)]*\)|AllowNull|MaybeNull|NotNull)\]\s*")]
+    private static partial Regex ParamReturnNullableRegex();
+
+    [GeneratedRegex(@"\[CompilerGenerated\]\s*")]
+    private static partial Regex CompilerGeneratedInlineRegex();
+
+    [GeneratedRegex(@"\[DebuggerBrowsable\([^)]*\)\]\s*")]
+    private static partial Regex DebuggerBrowsableInlineRegex();
+
+    [GeneratedRegex(@"\[(MaybeNull|NotNull|NotNullWhen\([^)]*\)|MaybeNullWhen\([^)]*\)|AllowNull|DisallowNull)\]\s*")]
+    private static partial Regex NullabilityContractInlineRegex();
+
+    [GeneratedRegex(@"<(\w+)>k__BackingField")]
+    private static partial Regex BackingFieldRegex();
+
+    [GeneratedRegex(@"  +")]
+    private static partial Regex MultiSpaceRegex();
 
     private static bool IsPublicApiType(ITypeDefinition type)
     {
@@ -221,17 +439,15 @@ internal sealed class TypeInspector : IDisposable
         };
     }
 
-    private static System.Text.RegularExpressions.Regex GlobToRegex(string pattern)
+    private static Regex GlobToRegex(string pattern)
     {
         var regexPattern = "^" +
-            System.Text.RegularExpressions.Regex.Escape(pattern)
+            Regex.Escape(pattern)
                 .Replace("\\*", ".*")
                 .Replace("\\?", ".") +
             "$";
 
-        return new System.Text.RegularExpressions.Regex(
-            regexPattern,
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return new Regex(regexPattern, RegexOptions.IgnoreCase);
     }
 
     public void Dispose()
