@@ -12,6 +12,7 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
         var package = parseResult.GetValue(command.PackageArgument)!;
         var version = parseResult.GetValue(command.VersionOption);
         var framework = parseResult.GetValue(command.FrameworkOption);
+        var showAll = parseResult.GetValue(command.AllOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -21,7 +22,7 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
 
             using var inspector = new TypeInspector(resolved.DllPath, resolved.XmlDocPath);
             var xmlDocs = XmlDocReader.TryLoad(resolved.XmlDocPath);
-            var types = inspector.GetPublicTypes();
+            var types = inspector.GetTypes(publicOnly: !showAll);
 
             if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
             {

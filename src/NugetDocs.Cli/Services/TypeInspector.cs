@@ -33,15 +33,21 @@ internal sealed partial class TypeInspector : IDisposable
     }
 
     /// <summary>
-    /// Get all public types, filtered to remove compiler-generated noise.
+    /// Get types, filtered to remove compiler-generated noise.
     /// </summary>
-    public IReadOnlyList<TypeInfo> GetPublicTypes()
+    public IReadOnlyList<TypeInfo> GetTypes(bool publicOnly = true)
     {
         var types = new List<TypeInfo>();
 
         foreach (var type in _decompiler.TypeSystem.MainModule.TypeDefinitions)
         {
-            if (!IsPublicApiType(type))
+            if (!IsNonNoiseType(type))
+            {
+                continue;
+            }
+
+            if (publicOnly && type.Accessibility != Accessibility.Public &&
+                type.Accessibility != Accessibility.Protected)
             {
                 continue;
             }
@@ -51,6 +57,7 @@ internal sealed partial class TypeInspector : IDisposable
                 Name: type.Name,
                 Namespace: type.Namespace,
                 Kind: GetTypeKind(type),
+                Accessibility: type.Accessibility.ToString(),
                 GenericParameterCount: type.TypeParameterCount));
         }
 
@@ -65,6 +72,124 @@ internal sealed partial class TypeInspector : IDisposable
         var fullName = ResolveTypeName(typeName);
         var raw = _decompiler.DecompileTypeAsString(new FullTypeName(fullName));
         return CleanDecompiledOutput(raw, publicOnly);
+    }
+
+    /// <summary>
+    /// Extract a specific member from decompiled type source by name.
+    /// Returns the member declaration with its XML doc comments.
+    /// </summary>
+    public static string? ExtractMember(string source, string memberName)
+    {
+        var lines = source.Split('\n');
+        var i = 0;
+
+        while (i < lines.Length)
+        {
+            var trimmed = lines[i].TrimStart();
+
+            // Look for member declarations that contain the member name
+            if (IsMemberDeclarationContaining(trimmed, memberName))
+            {
+                // Collect preceding XML doc comments and attributes
+                var start = i;
+                var docLines = new List<string>();
+                var lookBack = i - 1;
+                while (lookBack >= 0)
+                {
+                    var prevTrimmed = lines[lookBack].TrimStart();
+                    if (prevTrimmed.StartsWith("///", StringComparison.Ordinal) ||
+                        prevTrimmed.StartsWith("[", StringComparison.Ordinal))
+                    {
+                        docLines.Insert(0, lines[lookBack]);
+                        lookBack--;
+                    }
+                    else if (string.IsNullOrWhiteSpace(lines[lookBack]))
+                    {
+                        lookBack--;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // Collect the member body
+                var end = SkipMemberBody(lines.ToList(), i);
+                var memberLines = new List<string>(docLines);
+                for (var j = i; j < end; j++)
+                {
+                    memberLines.Add(lines[j]);
+                }
+
+                return string.Join('\n', memberLines);
+            }
+
+            i++;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Check if a line declares a member with the given name.
+    /// Only matches the declaration signature (before =>, {, or (), not the body.
+    /// </summary>
+    private static bool IsMemberDeclarationContaining(string trimmedLine, string memberName)
+    {
+        // Skip non-declaration lines
+        if (string.IsNullOrWhiteSpace(trimmedLine) ||
+            trimmedLine.StartsWith("///", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("//", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("[", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("using ", StringComparison.Ordinal) ||
+            trimmedLine.StartsWith("namespace ", StringComparison.Ordinal) ||
+            trimmedLine is "{" or "}" or "")
+        {
+            return false;
+        }
+
+        // Extract just the declaration part (before =>, {, or ()
+        // This prevents matching references in expression bodies
+        var declPart = trimmedLine;
+        var arrowIdx = declPart.IndexOf("=>", StringComparison.Ordinal);
+        var braceIdx = declPart.IndexOf('{');
+        var parenIdx = declPart.IndexOf('(');
+
+        var cutoff = declPart.Length;
+        if (arrowIdx >= 0 && arrowIdx < cutoff) cutoff = arrowIdx;
+        if (braceIdx >= 0 && braceIdx < cutoff) cutoff = braceIdx;
+        if (parenIdx >= 0 && parenIdx < cutoff) cutoff = parenIdx;
+
+        declPart = declPart[..cutoff];
+
+        // Check for the member name as a word boundary match in the declaration part
+        var nameIndex = declPart.IndexOf(memberName, StringComparison.OrdinalIgnoreCase);
+        if (nameIndex < 0)
+        {
+            return false;
+        }
+
+        // Verify it's a word boundary (not a substring of a longer name)
+        var afterName = nameIndex + memberName.Length;
+        if (afterName < declPart.Length)
+        {
+            var nextChar = declPart[afterName];
+            if (char.IsLetterOrDigit(nextChar) || nextChar == '_')
+            {
+                return false;
+            }
+        }
+
+        if (nameIndex > 0)
+        {
+            var prevChar = declPart[nameIndex - 1];
+            if (char.IsLetterOrDigit(prevChar) || prevChar == '_')
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -492,13 +617,17 @@ internal sealed partial class TypeInspector : IDisposable
 
     private static bool IsPublicApiType(ITypeDefinition type)
     {
-        // Must be public
         if (type.Accessibility != Accessibility.Public &&
             type.Accessibility != Accessibility.Protected)
         {
             return false;
         }
 
+        return IsNonNoiseType(type);
+    }
+
+    private static bool IsNonNoiseType(ITypeDefinition type)
+    {
         var name = type.Name;
         var fullName = type.FullName;
 
@@ -522,7 +651,7 @@ internal sealed partial class TypeInspector : IDisposable
 
         // Filter nested compiler-generated types
         if (type.DeclaringType is not null &&
-            !IsPublicApiType(type.DeclaringType.GetDefinition()!))
+            !IsNonNoiseType(type.DeclaringType.GetDefinition()!))
         {
             return false;
         }
@@ -589,6 +718,7 @@ internal sealed partial class TypeInspector : IDisposable
         string Name,
         string Namespace,
         string Kind,
+        string Accessibility,
         int GenericParameterCount);
 
     public record SearchResult(

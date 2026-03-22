@@ -36,18 +36,18 @@ Use `nuget-docs` when you need to:
 ### List all public types
 
 ```bash
-nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--output json]
+nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--output json]
 ```
 
-Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries.
+Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries. Use `--all` (`-a`) to include internal types.
 
 ### Show a specific type
 
 ```bash
-nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--output json]
+nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--output json]
 ```
 
-Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members.
+Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members. Use `--member` (`-m`) to show only a specific member.
 
 ### Search types and members
 
@@ -76,7 +76,8 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Short names resolve automatically**: `IChatClient` → `Microsoft.Extensions.AI.IChatClient`
 - **Packages auto-download**: No need to pre-install — packages are fetched from NuGet if not cached
 - **Framework auto-selection**: Picks the best TFM (prefers net10.0 > net9.0 > net8.0 > netstandard2.1 > netstandard2.0)
-- **Public API by default**: `show` and `search` strip private/internal members — use `--all` to see everything
+- **Public API by default**: `list`, `show`, and `search` strip non-public items — use `--all` to see everything
+- **Member focus**: Use `--member Name` with `show` to extract a single method/property instead of the full type
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
@@ -105,6 +106,13 @@ nuget-docs list Humanizer
 
 # Check metadata and dependencies
 nuget-docs info Humanizer
+```
+
+### Inspecting a specific member
+
+```bash
+# Show just the GetResponseAsync method signature and docs
+nuget-docs show Microsoft.Extensions.AI.Abstractions IChatClient --member GetResponseAsync
 ```
 
 ### Version-specific inspection

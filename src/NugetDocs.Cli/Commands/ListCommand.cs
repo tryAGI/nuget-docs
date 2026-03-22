@@ -7,6 +7,11 @@ internal sealed class ListCommand : Command
     public Argument<string> PackageArgument { get; } = CommonOptions.Package;
     public Option<string?> VersionOption { get; } = CommonOptions.Version;
     public Option<string?> FrameworkOption { get; } = CommonOptions.Framework;
+    public Option<bool> AllOption { get; } = new("--all", "-a")
+    {
+        Description = "Show all types including internal (default: public only)",
+        DefaultValueFactory = _ => false,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public ListCommand() : base("list", "List all public types in a NuGet package")
@@ -14,6 +19,7 @@ internal sealed class ListCommand : Command
         Arguments.Add(PackageArgument);
         Options.Add(VersionOption);
         Options.Add(FrameworkOption);
+        Options.Add(AllOption);
         Options.Add(OutputOption);
 
         Action = new ListCommandAction(this);

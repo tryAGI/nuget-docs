@@ -14,6 +14,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
         var version = parseResult.GetValue(command.VersionOption);
         var framework = parseResult.GetValue(command.FrameworkOption);
         var showAll = parseResult.GetValue(command.AllOption);
+        var memberName = parseResult.GetValue(command.MemberOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -24,6 +25,19 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
             using var inspector = new TypeInspector(resolved.DllPath, resolved.XmlDocPath);
             var source = inspector.DecompileType(typeName, publicOnly: !showAll);
 
+            // If --member is specified, extract just that member
+            if (memberName is not null)
+            {
+                var memberSource = TypeInspector.ExtractMember(source, memberName);
+                if (memberSource is null)
+                {
+                    Console.Error.WriteLine($"Error: Member '{memberName}' not found in type.");
+                    return 1;
+                }
+
+                source = memberSource;
+            }
+
             if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
             {
                 var resolvedName = inspector.ResolveTypeName(typeName);
@@ -33,6 +47,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
                     version = resolved.Version,
                     framework = resolved.Framework,
                     typeName = resolvedName,
+                    member = memberName,
                     source,
                 };
                 Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
