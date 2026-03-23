@@ -1,11 +1,37 @@
 # nuget-docs
 
-A .NET global tool to inspect public API documentation from any NuGet package. Decompiles types with XML docs, compares API between versions, resolves dependencies — optimized for AI agents and CLI workflows.
+Inspect public API documentation from any NuGet package — decompile types with XML docs, compare API between versions, resolve dependencies. Built for AI agents and CLI workflows.
 
-## Installation
+## Claude Code Skill (Recommended)
+
+Install as a [Claude Code skill](https://skills.sh) so your AI agent automatically knows when and how to inspect NuGet packages:
+
+```bash
+npx skills add tryAGI/nuget-docs -g
+```
+
+This teaches Claude Code to run `nuget-docs` commands when you ask questions like *"what methods does IChatClient have?"* or *"show me the ChatOptions class"*.
+
+## CLI Installation
 
 ```bash
 dotnet tool install -g nuget-docs
+```
+
+## Quick Start
+
+```bash
+# See all public types in a package
+nuget-docs list Microsoft.Extensions.AI.Abstractions
+
+# Decompile a type with full XML docs (short names work)
+nuget-docs show Microsoft.Extensions.AI.Abstractions IChatClient
+
+# Search for types/members
+nuget-docs search Microsoft.Extensions.AI.Abstractions "Chat*"
+
+# Compare API between versions
+nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to latest
 ```
 
 ## Commands
@@ -42,6 +68,9 @@ Uses glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` lab
 ```bash
 # Full unified diff with hunk headers
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to 10.4.0
+
+# Use "latest" to auto-resolve the latest version
+nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to latest
 
 # Quick summary — added/removed types only
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --type-only
@@ -104,19 +133,36 @@ nuget-docs versions Humanizer --limit 50     # show more (default: 20, 0 = all)
 - Short type name resolution (`IChatClient` → `Microsoft.Extensions.AI.IChatClient`)
 - Nested type support (`ChatRole.Converter` → `ChatRole+Converter`)
 - API diff with unified diff, member-level changes, and breaking change detection
+- `--to latest` / `--from latest` auto-resolves the latest version from NuGet.org
 - Dependency tree with transitive resolution and deduplication
 - Version listing with stable/latest filters
 - Framework-aware: picks best matching TFM (net10.0 > net9.0 > ... > netstandard2.0)
 - AI-optimized plain text output
 - JSON output on all commands
+- Tab completion via `dotnet-suggest`
 - Zero configuration — works out of the box
 
-## Claude Code Skill
+## Shell Completion
 
-Install as a [Claude Code skill](https://skills.sh) for automatic NuGet API inspection:
+Install the `dotnet-suggest` global tool and enable tab completion for your shell:
 
 ```bash
-npx skills add tryAGI/nuget-docs -g
+dotnet tool install -g dotnet-suggest
+```
+
+**bash** (add to `~/.bashrc`):
+```bash
+source <(dotnet-suggest script bash)
+```
+
+**zsh** (add to `~/.zshrc`):
+```bash
+source <(dotnet-suggest script zsh)
+```
+
+**fish** (add to `~/.config/fish/config.fish`):
+```fish
+dotnet-suggest script fish | source
 ```
 
 ## License
