@@ -1,8 +1,6 @@
 using System.CommandLine;
 using System.CommandLine.Invocation;
-using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using NugetDocs.Cli.Services;
 
 namespace NugetDocs.Cli.Commands;
@@ -26,15 +24,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
 
         try
         {
-            // Resolve "latest" to actual version
-            if (IsLatestKeyword(fromVersion) || IsLatestKeyword(toVersion))
-            {
-                var resolved = await ResolveLatestVersionAsync(package, cancellationToken).ConfigureAwait(false);
-                if (IsLatestKeyword(fromVersion)) fromVersion = resolved;
-                if (IsLatestKeyword(toVersion)) toVersion = resolved;
-            }
-
-            // Resolve both versions
+            // Resolve both versions ("latest", "latest-stable", "latest-prerelease" handled by PackageResolver)
             var fromResolved = await PackageResolver.ResolveAsync(
                 package, fromVersion, framework, cancellationToken).ConfigureAwait(false);
             var toResolved = await PackageResolver.ResolveAsync(
@@ -516,30 +506,6 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                 Console.WriteLine($"    + {to.Signature}");
             }
         }
-    }
-
-    private static bool IsLatestKeyword(string version) =>
-        string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase);
-
-    private static async Task<string> ResolveLatestVersionAsync(
-        string package, CancellationToken cancellationToken)
-    {
-        var packageId = package.ToLowerInvariant();
-        using var http = new HttpClient();
-        var url = $"https://api.nuget.org/v3-flatcontainer/{packageId}/index.json";
-        var response = await http.GetFromJsonAsync<VersionIndex>(url, cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"Could not resolve versions for package '{package}'.");
-
-        var versions = response.Versions ?? [];
-        var latestStable = versions.Where(v => !v.Contains('-')).LastOrDefault();
-        return latestStable ?? versions.LastOrDefault()
-            ?? throw new InvalidOperationException($"No versions found for package '{package}'.");
-    }
-
-    private sealed class VersionIndex
-    {
-        [JsonPropertyName("versions")]
-        public List<string>? Versions { get; set; }
     }
 
     private record ChangedType(

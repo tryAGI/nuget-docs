@@ -109,7 +109,7 @@ Lists all available versions of a package from NuGet.org, newest first. Use `--s
 - **Namespace filter**: Use `--namespace Prefix` with `list` or `search` to filter by namespace
 - **Assembly attributes**: Use `show <pkg> --assembly` to see `[assembly:]` attributes (TargetFramework, InternalsVisibleTo, etc.)
 - **Assembly namespace filter**: Use `--namespace` with `show --assembly` to filter attributes by their type's namespace (e.g., `--namespace System.Runtime.Versioning`)
-- **API diff**: Use `diff <pkg> --from <v1> --to <v2>` to compare public API between versions — shows added/removed/changed types with unified diff. Use `latest` as a version value to auto-resolve (e.g., `--to latest`)
+- **API diff**: Use `diff <pkg> --from <v1> --to <v2>` to compare public API between versions — shows added/removed/changed types with unified diff. Supports `latest`, `latest-stable`, `latest-prerelease` keywords (e.g., `--from latest-stable --to latest-prerelease`)
 - **Quick diff**: Use `--type-only` (`-t`) with `diff` for a fast summary without decompiling — shows only added/removed type names
 - **Breaking changes**: Use `--breaking` (`-b`) with `diff` to filter to only breaking changes (removed types, member removals/signature changes)
 - **Member-level diff**: Use `--member-diff` (`-m`) with `diff` for structured member changes (added/removed/changed methods/properties) instead of full source diff — formats `Nullable<T>` as `T?` and resolves generic type arguments cleanly
@@ -121,7 +121,7 @@ Lists all available versions of a package from NuGet.org, newest first. Use `--s
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
-- **Version pinning**: Use `--version` to inspect a specific version
+- **Version pinning**: Use `--version` to inspect a specific version. Supports `latest`, `latest-stable`, and `latest-prerelease` keywords on any command
 
 ## Examples
 
@@ -199,6 +199,9 @@ nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to 10.4.0
 # Use "latest" to auto-resolve the latest stable version
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to latest
 
+# Compare latest stable vs latest prerelease
+nuget-docs diff Microsoft.Extensions.AI.Abstractions --from latest-stable --to latest-prerelease
+
 # Quick overview — just added/removed types, no decompilation
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --type-only
 
@@ -226,4 +229,8 @@ nuget-docs diff Newtonsoft.Json --from 13.0.3 --to 13.0.4 --output json
 ```bash
 # Check a specific version
 nuget-docs show Microsoft.Extensions.AI.Abstractions ChatOptions --version 10.4.0
+
+# Use "latest" keyword (works on any command)
+nuget-docs list Microsoft.Extensions.AI.Abstractions --version latest
+nuget-docs show Microsoft.Extensions.AI.Abstractions IChatClient --version latest-prerelease
 ```

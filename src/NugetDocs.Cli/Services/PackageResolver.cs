@@ -71,6 +71,13 @@ internal sealed class PackageResolver
     {
         var packageCacheDir = Path.Combine(NuGetCacheDir, packageId);
 
+        // Handle "latest", "latest-stable", "latest-prerelease" keywords
+        if (requestedVersion is not null && IsVersionKeyword(requestedVersion))
+        {
+            requestedVersion = await ResolveVersionKeywordAsync(
+                packageId, requestedVersion, cancellationToken).ConfigureAwait(false);
+        }
+
         if (requestedVersion is not null)
         {
             var versionDir = Path.Combine(packageCacheDir, requestedVersion.ToLowerInvariant());
@@ -300,6 +307,45 @@ internal sealed class PackageResolver
                 .Equals(packageId.Replace("-", "."), StringComparison.OrdinalIgnoreCase) == true);
 
         return primaryDll ?? dlls[0];
+    }
+
+    private static bool IsVersionKeyword(string version) =>
+        string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(version, "latest-stable", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(version, "latest-prerelease", StringComparison.OrdinalIgnoreCase);
+
+    private static async Task<string> ResolveVersionKeywordAsync(
+        string packageId,
+        string keyword,
+        CancellationToken cancellationToken)
+    {
+        using var http = new HttpClient();
+        var url = $"https://api.nuget.org/v3-flatcontainer/{packageId}/index.json";
+        var response = await http.GetFromJsonAsync<NuGetVersionIndex>(url, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"Could not resolve versions for package '{packageId}'.");
+
+        var versions = response.Versions ?? [];
+
+        if (string.Equals(keyword, "latest-prerelease", StringComparison.OrdinalIgnoreCase))
+        {
+            return versions.Where(v => v.Contains('-')).LastOrDefault()
+                ?? throw new InvalidOperationException(
+                    $"No prerelease versions found for package '{packageId}'.");
+        }
+
+        // "latest" and "latest-stable" both prefer stable, fall back to any
+        var latestStable = versions.Where(v => !v.Contains('-')).LastOrDefault();
+
+        if (string.Equals(keyword, "latest-stable", StringComparison.OrdinalIgnoreCase))
+        {
+            return latestStable
+                ?? throw new InvalidOperationException(
+                    $"No stable versions found for package '{packageId}'.");
+        }
+
+        // "latest" — prefer stable, fall back to prerelease
+        return latestStable ?? versions.LastOrDefault()
+            ?? throw new InvalidOperationException($"No versions found for package '{packageId}'.");
     }
 
     private sealed class NuGetVersionIndex

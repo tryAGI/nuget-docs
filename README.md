@@ -72,6 +72,9 @@ nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to 10.4.0
 # Use "latest" to auto-resolve the latest version
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to latest
 
+# Compare latest stable vs latest prerelease
+nuget-docs diff Microsoft.Extensions.AI.Abstractions --from latest-stable --to latest-prerelease
+
 # Quick summary — added/removed types only
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --type-only
 
@@ -120,7 +123,7 @@ nuget-docs versions Humanizer --limit 50     # show more (default: 20, 0 = all)
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--version <ver>` | `-v` | Pin to a specific package version |
+| `--version <ver>` | `-v` | Pin to a specific package version (`latest`, `latest-stable`, `latest-prerelease`) |
 | `--framework <tfm>` | `-f` | Target framework (auto-detected by default) |
 | `--all` | `-a` | Include internal/private members |
 | `--namespace <prefix>` | `-n` | Filter by namespace prefix |
@@ -133,7 +136,7 @@ nuget-docs versions Humanizer --limit 50     # show more (default: 20, 0 = all)
 - Short type name resolution (`IChatClient` → `Microsoft.Extensions.AI.IChatClient`)
 - Nested type support (`ChatRole.Converter` → `ChatRole+Converter`)
 - API diff with unified diff, member-level changes, and breaking change detection
-- `--to latest` / `--from latest` auto-resolves the latest version from NuGet.org
+- Version keywords: `latest`, `latest-stable`, `latest-prerelease` work on any `--version`, `--from`, `--to`
 - Dependency tree with transitive resolution and deduplication
 - Version listing with stable/latest filters
 - Framework-aware: picks best matching TFM (net10.0 > net9.0 > ... > netstandard2.0)
