@@ -61,10 +61,10 @@ Searches types and members using glob patterns (`*` and `?` wildcards). Results 
 ### Compare API between versions
 
 ```bash
-nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--type-only] [--breaking] [--member-diff] [--no-additive] [--output json]
+nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--type-only] [--breaking] [--member-diff] [--no-additive] [--ignore-docs] [--output json]
 ```
 
-Compares the public API surface between two versions of a package. Shows added, removed, and changed types with a unified diff (Myers algorithm) including `@@ -line,count +line,count @@` hunk headers. Use `--type-only` (`-t`) for a quick summary without decompiling. Use `--breaking` (`-b`) to show only potentially breaking changes. Use `--member-diff` (`-m`) to show structured member-level changes (added/removed/changed methods/properties) instead of full source diff. Use `--no-additive` to hide purely additive changes and show only removals/modifications for upgrade safety checks (also available as `--include-additive false`). Works with both source-level and member-level diffs. **Exit codes**: 0 = no breaking changes, 1 = error, 2 = breaking changes detected (useful for CI).
+Compares the public API surface between two versions of a package. Shows added, removed, and changed types with a unified diff (Myers algorithm) including `@@ -line,count +line,count @@` hunk headers. Use `--type-only` (`-t`) for a quick summary without decompiling. Use `--breaking` (`-b`) to show only potentially breaking changes. Use `--member-diff` (`-m`) to show structured member-level changes (added/removed/changed methods/properties) instead of full source diff. Use `--no-additive` to hide purely additive changes and show only removals/modifications for upgrade safety checks (also available as `--include-additive false`). Use `--ignore-docs` to ignore XML doc comment changes in source-level diff. Works with both source-level and member-level diffs. **Exit codes**: 0 = no breaking changes, 1 = error, 2 = breaking changes detected (useful for CI).
 
 ### Package metadata
 
@@ -83,7 +83,7 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 
 ## Tips for AI Agents
 
-- **Short names resolve automatically**: `IChatClient` → `Microsoft.Extensions.AI.IChatClient`
+- **Short names resolve automatically**: `IChatClient` → `Microsoft.Extensions.AI.IChatClient`, `ChatRole.Converter` → nested type
 - **Packages auto-download**: No need to pre-install — packages are fetched from NuGet if not cached
 - **Framework auto-selection**: Picks the best TFM (prefers net10.0 > net9.0 > net8.0 > netstandard2.1 > netstandard2.0)
 - **Public API by default**: `list`, `show`, and `search` strip non-public items — use `--all` to see everything
@@ -96,6 +96,7 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 - **Breaking changes**: Use `--breaking` (`-b`) with `diff` to filter to only breaking changes (removed types, member removals/signature changes)
 - **Member-level diff**: Use `--member-diff` (`-m`) with `diff` for structured member changes (added/removed/changed methods/properties) instead of full source diff — formats `Nullable<T>` as `T?` and resolves generic type arguments cleanly
 - **Skip additive changes**: Use `--no-additive` with `diff` to hide purely additive changes (new types, additive-only type modifications) and show only removals/modifications — works with both source-level and member-level diffs
+- **Ignore doc changes**: Use `--ignore-docs` with `diff` to skip XML doc comment changes — reduces noise when only code changes matter
 - **CI integration**: `diff` returns exit code 2 when breaking changes are detected (0 = clean, 1 = error)
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
@@ -174,6 +175,9 @@ nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 -
 
 # Show only removals/modifications (skip purely additive changes)
 nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --no-additive
+
+# Ignore doc comment changes — show only code changes
+nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.4.0 --to 10.4.1 --ignore-docs
 
 # CI usage — exit code 2 means breaking changes detected
 nuget-docs diff MyPackage --from 1.0.0 --to 2.0.0 --type-only || echo "Breaking changes!"

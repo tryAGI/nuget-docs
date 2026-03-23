@@ -41,6 +41,11 @@ internal sealed class DiffCommand : Command
         Description = "Shorthand for --include-additive false. Hide purely additive changes and show only removals/modifications",
         DefaultValueFactory = _ => false,
     };
+    public Option<bool> IgnoreDocsOption { get; } = new("--ignore-docs")
+    {
+        Description = "Ignore XML doc comment changes in source-level diff, reducing noise from documentation-only updates",
+        DefaultValueFactory = _ => false,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public DiffCommand() : base("diff", "Compare public API surface between two versions of a package")
@@ -54,6 +59,7 @@ internal sealed class DiffCommand : Command
         Options.Add(MemberDiffOption);
         Options.Add(IncludeAdditiveOption);
         Options.Add(NoAdditiveOption);
+        Options.Add(IgnoreDocsOption);
         Options.Add(OutputOption);
 
         Action = new DiffCommandAction(this);

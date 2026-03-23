@@ -58,7 +58,8 @@ internal sealed partial class TypeInspector : IDisposable
                 Namespace: type.Namespace,
                 Kind: GetTypeKind(type),
                 Accessibility: type.Accessibility.ToString(),
-                GenericParameterCount: type.TypeParameterCount));
+                GenericParameterCount: type.TypeParameterCount,
+                ReflectionName: type.FullTypeName.ReflectionName));
         }
 
         return types.OrderBy(t => t.Namespace).ThenBy(t => t.Name).ToList();
@@ -350,6 +351,12 @@ internal sealed partial class TypeInspector : IDisposable
     /// </summary>
     public string ResolveTypeName(string typeName)
     {
+        // If it contains '+' it's already a reflection name for nested types — use as-is
+        if (typeName.Contains('+'))
+        {
+            return typeName;
+        }
+
         // If it looks like a full name already (with or without backtick arity)
         if (typeName.Contains('.'))
         {
@@ -359,13 +366,32 @@ internal sealed partial class TypeInspector : IDisposable
                 return typeName;
             }
 
-            // Try to find exact match to resolve generic arity
+            // Try to find exact match — return ReflectionName to handle nested types
             var exactMatch = _decompiler.TypeSystem.MainModule.TypeDefinitions
                 .FirstOrDefault(t => string.Equals(t.FullName, typeName, StringComparison.OrdinalIgnoreCase));
 
-            if (exactMatch is not null && exactMatch.TypeParameterCount > 0)
+            if (exactMatch is not null)
             {
-                return $"{exactMatch.FullName}`{exactMatch.TypeParameterCount}";
+                return exactMatch.FullTypeName.ReflectionName;
+            }
+
+            // Try suffix match for short nested names like "ChatRole.Converter"
+            var suffixMatches = _decompiler.TypeSystem.MainModule.TypeDefinitions
+                .Where(t => IsPublicApiType(t) &&
+                    t.FullName.EndsWith("." + typeName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (suffixMatches.Count == 1)
+            {
+                return suffixMatches[0].FullTypeName.ReflectionName;
+            }
+
+            if (suffixMatches.Count > 1)
+            {
+                var suffixCandidates = suffixMatches.Select(m => $"  {m.FullName}");
+                throw new InvalidOperationException(
+                    $"Ambiguous type name '{typeName}'. Candidates:\n" +
+                    string.Join("\n", suffixCandidates));
             }
 
             return typeName;
@@ -384,7 +410,7 @@ internal sealed partial class TypeInspector : IDisposable
 
         if (matches.Count == 1)
         {
-            return matches[0].FullName;
+            return matches[0].FullTypeName.ReflectionName;
         }
 
         // For generic arity variants (e.g., IEmbeddingGenerator and IEmbeddingGenerator<,>),
@@ -394,7 +420,7 @@ internal sealed partial class TypeInspector : IDisposable
 
         if (allSameBaseName)
         {
-            return matches.OrderByDescending(m => m.TypeParameterCount).First().FullName;
+            return matches.OrderByDescending(m => m.TypeParameterCount).First().FullTypeName.ReflectionName;
         }
 
         // Truly ambiguous — show candidates with arity info
@@ -839,7 +865,8 @@ internal sealed partial class TypeInspector : IDisposable
         string Namespace,
         string Kind,
         string Accessibility,
-        int GenericParameterCount);
+        int GenericParameterCount,
+        string ReflectionName);
 
     public record SearchResult(
         string Kind,

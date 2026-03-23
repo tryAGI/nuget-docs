@@ -19,6 +19,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var includeAdditive = parseResult.GetValue(command.IncludeAdditiveOption);
         var noAdditive = parseResult.GetValue(command.NoAdditiveOption);
         if (noAdditive) includeAdditive = false;
+        var ignoreDocs = parseResult.GetValue(command.IgnoreDocsOption);
         var output = parseResult.GetValue(command.OutputOption);
 
         try
@@ -63,9 +64,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                     // Both exist — compare (skip if --type-only)
                     try
                     {
-                        var reflectionName = fromType!.GenericParameterCount > 0
-                            ? $"{fromType.FullName}`{fromType.GenericParameterCount}"
-                            : fromType.FullName;
+                        var reflectionName = fromType!.ReflectionName;
 
                         if (memberDiff)
                         {
@@ -86,9 +85,14 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                             var fromSource = fromInspector.DecompileType(reflectionName);
                             var toSource = toInspector.DecompileType(reflectionName);
 
-                            if (!string.Equals(fromSource, toSource, StringComparison.Ordinal))
+                            // When --ignore-docs, strip XML doc comments before comparing
+                            var fromCompare = ignoreDocs ? StripDocComments(fromSource) : fromSource;
+                            var toCompare = ignoreDocs ? StripDocComments(toSource) : toSource;
+
+                            if (!string.Equals(fromCompare, toCompare, StringComparison.Ordinal))
                             {
-                                var isBreaking = HasBreakingChanges(fromSource, toSource);
+                                var isBreaking = HasBreakingChanges(fromCompare, toCompare);
+                                // Store original sources for display (with docs), but use stripped for comparison
                                 changed.Add(new ChangedType(toType!, fromSource, toSource, isBreaking, null));
                             }
                         }
@@ -207,6 +211,32 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         }
 
         return new MemberChanges(pureAdded, pureRemoved, changedMembers);
+    }
+
+    /// <summary>
+    /// Strip XML doc comment lines (/// ...) from source, collapsing consecutive blank lines.
+    /// </summary>
+    private static string StripDocComments(string source)
+    {
+        var lines = source.Split('\n');
+        var result = new List<string>(lines.Length);
+        var lastWasBlank = false;
+
+        foreach (var line in lines)
+        {
+            if (line.TrimStart().StartsWith("///", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var isBlank = string.IsNullOrWhiteSpace(line);
+            if (isBlank && lastWasBlank) continue;
+
+            result.Add(line);
+            lastWasBlank = isBlank;
+        }
+
+        return string.Join('\n', result);
     }
 
     /// <summary>
