@@ -134,7 +134,7 @@ internal sealed class PackageResolver
         var versions = Directory.GetDirectories(packageCacheDir)
             .Select(d => Path.GetFileName(d))
             .Where(v => v is not null && !v.Contains('-', StringComparison.Ordinal)) // stable only
-            .OrderByDescending(v => v, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(v => v, NuGetVersionComparer.Instance)
             .ToList();
 
         if (versions.Count == 0)
@@ -143,7 +143,7 @@ internal sealed class PackageResolver
             versions = Directory.GetDirectories(packageCacheDir)
                 .Select(d => Path.GetFileName(d))
                 .Where(v => v is not null)
-                .OrderByDescending(v => v, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(v => v, NuGetVersionComparer.Instance)
                 .ToList();
         }
 

@@ -118,6 +118,7 @@ nuget-docs versions Humanizer --stable       # exclude prereleases
 nuget-docs versions Humanizer --latest       # latest stable + prerelease
 nuget-docs versions Newtonsoft.Json --since 13.0.1           # versions after 13.0.1
 nuget-docs versions Newtonsoft.Json --since 13.0.1 --stable  # stable only, after 13.0.1
+nuget-docs versions Newtonsoft.Json --count --since 13.0.1   # just the count (for CI)
 nuget-docs versions Humanizer --limit 50     # show more (default: 20, 0 = all)
 ```
 

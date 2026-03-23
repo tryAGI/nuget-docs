@@ -25,6 +25,11 @@ internal sealed class VersionsCommand : Command
         Description = "Show only versions newer than the specified version",
         DefaultValueFactory = _ => null,
     };
+    public Option<bool> CountOption { get; } = new("--count", "-c")
+    {
+        Description = "Output only the count of matching versions",
+        DefaultValueFactory = _ => false,
+    };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
 
     public VersionsCommand() : base("versions", "List all available versions of a package from NuGet.org")
@@ -34,6 +39,7 @@ internal sealed class VersionsCommand : Command
         Options.Add(LatestOption);
         Options.Add(SinceOption);
         Options.Add(LimitOption);
+        Options.Add(CountOption);
         Options.Add(OutputOption);
 
         Action = new VersionsCommandAction(this);
