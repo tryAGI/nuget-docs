@@ -117,7 +117,7 @@ Lists all available versions of a package from NuGet.org, newest first. Use `--s
 - **Ignore doc changes**: Use `--ignore-docs` with `diff` to skip XML doc comment changes — reduces noise when only code changes matter
 - **CI integration**: `diff` returns exit code 2 when breaking changes are detected (0 = clean, 1 = error)
 - **Dependency tree**: Use `deps <pkg>` to see direct dependencies; `--depth 2` for transitive; shared deps show `(already listed)`
-- **Version listing**: Use `versions <pkg>` to see all versions; `--stable` for stable only; `--latest` for quick lookup of latest stable + prerelease; `--since <ver>` to see only versions released after a specific version; useful before `diff`
+- **Version listing**: Use `versions <pkg>` to see all versions; `--stable` for stable only; `--latest` for quick lookup of latest stable + prerelease; `--since <ver>` to see only versions released after a specific version (supports `latest`, `latest-stable`, `latest-prerelease` keywords); useful before `diff`
 - **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
@@ -164,6 +164,9 @@ nuget-docs versions Newtonsoft.Json --since 13.0.1
 
 # Combine: stable versions since a specific release
 nuget-docs versions Newtonsoft.Json --since 13.0.1 --stable
+
+# Use version keywords: what's newer than the latest stable?
+nuget-docs versions Newtonsoft.Json --since latest-stable
 ```
 
 ### Inspecting a specific member

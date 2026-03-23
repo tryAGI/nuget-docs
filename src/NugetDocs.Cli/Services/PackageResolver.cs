@@ -35,7 +35,9 @@ internal sealed class PackageResolver
         string? requestedFramework,
         CancellationToken cancellationToken = default)
     {
+#pragma warning disable CA1308 // NuGet API requires lowercase package names
         var packageId = packageName.ToLowerInvariant();
+#pragma warning restore CA1308
 
         // 1. Find or download package
         var (packageDir, version) = await FindOrDownloadPackageAsync(
@@ -80,7 +82,9 @@ internal sealed class PackageResolver
 
         if (requestedVersion is not null)
         {
+#pragma warning disable CA1308 // NuGet cache uses lowercase
             var versionDir = Path.Combine(packageCacheDir, requestedVersion.ToLowerInvariant());
+#pragma warning restore CA1308
             if (Directory.Exists(versionDir))
             {
                 return (versionDir, requestedVersion);
@@ -101,7 +105,9 @@ internal sealed class PackageResolver
             ?? await ResolveLatestVersionAsync(packageId, cancellationToken).ConfigureAwait(false);
 
         // Check cache again with resolved version
+#pragma warning disable CA1308 // NuGet cache uses lowercase
         var resolvedDir = Path.Combine(packageCacheDir, resolvedVersion.ToLowerInvariant());
+#pragma warning restore CA1308
         if (Directory.Exists(resolvedDir))
         {
             return (resolvedDir, resolvedVersion);
@@ -110,7 +116,9 @@ internal sealed class PackageResolver
         // Download
         await DownloadPackageAsync(originalName, resolvedVersion, cancellationToken).ConfigureAwait(false);
 
+#pragma warning disable CA1308 // NuGet cache uses lowercase
         resolvedDir = Path.Combine(packageCacheDir, resolvedVersion.ToLowerInvariant());
+#pragma warning restore CA1308
         if (!Directory.Exists(resolvedDir))
         {
             throw new InvalidOperationException(
@@ -309,12 +317,12 @@ internal sealed class PackageResolver
         return primaryDll ?? dlls[0];
     }
 
-    private static bool IsVersionKeyword(string version) =>
+    internal static bool IsVersionKeyword(string version) =>
         string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(version, "latest-stable", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(version, "latest-prerelease", StringComparison.OrdinalIgnoreCase);
 
-    private static async Task<string> ResolveVersionKeywordAsync(
+    internal static async Task<string> ResolveVersionKeywordAsync(
         string packageId,
         string keyword,
         CancellationToken cancellationToken)
@@ -348,7 +356,9 @@ internal sealed class PackageResolver
             ?? throw new InvalidOperationException($"No versions found for package '{packageId}'.");
     }
 
+#pragma warning disable CA1812 // Instantiated via JSON deserialization
     private sealed class NuGetVersionIndex
+#pragma warning restore CA1812
     {
         [JsonPropertyName("versions")]
         public List<string>? Versions { get; set; }

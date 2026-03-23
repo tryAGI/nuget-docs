@@ -913,7 +913,7 @@ internal sealed partial class TypeInspector : IDisposable
 
     private static string FormatMemberSignature(IMember member)
     {
-        var access = member.Accessibility.ToString().ToLowerInvariant();
+        var access = MapAccessibility(member.Accessibility);
         return member switch
         {
             IMethod m when m.IsConstructor =>
@@ -931,6 +931,17 @@ internal sealed partial class TypeInspector : IDisposable
             _ => member.Name,
         };
     }
+
+    private static string MapAccessibility(Accessibility accessibility) => accessibility switch
+    {
+        Accessibility.Public => "public",
+        Accessibility.Protected => "protected",
+        Accessibility.Internal => "internal",
+        Accessibility.ProtectedOrInternal => "protected internal",
+        Accessibility.ProtectedAndInternal => "private protected",
+        Accessibility.Private => "private",
+        _ => "private",
+    };
 
     private static string FormatType(IType type)
     {

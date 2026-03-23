@@ -3,6 +3,7 @@ using System.CommandLine.Invocation;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NugetDocs.Cli.Services;
 
 namespace NugetDocs.Cli.Commands;
 
@@ -19,9 +20,10 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
 
         try
         {
-            var packageId = package.ToUpperInvariant();
             using var http = new HttpClient();
+#pragma warning disable CA1308 // NuGet API requires lowercase package names
             var url = $"https://api.nuget.org/v3-flatcontainer/{package.ToLowerInvariant()}/index.json";
+#pragma warning restore CA1308
             var response = await http.GetFromJsonAsync<VersionIndex>(url, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException($"Could not resolve versions for package '{package}'.");
 
@@ -34,14 +36,22 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
 
             if (since is not null)
             {
-                var sinceIndex = versions.IndexOf(since);
+#pragma warning disable CA1308 // NuGet API requires lowercase package names
+                var resolvedSince = PackageResolver.IsVersionKeyword(since)
+                    ? await PackageResolver.ResolveVersionKeywordAsync(
+                        package.ToLowerInvariant(), since, cancellationToken).ConfigureAwait(false)
+                    : since;
+#pragma warning restore CA1308
+
+                var sinceIndex = versions.IndexOf(resolvedSince);
                 if (sinceIndex >= 0)
                 {
                     versions = versions.Skip(sinceIndex + 1).ToList();
+                    since = resolvedSince; // Use resolved version in output
                 }
                 else
                 {
-                    Console.Error.WriteLine($"Warning: Version '{since}' not found in package history. Showing all versions.");
+                    Console.Error.WriteLine($"Warning: Version '{resolvedSince}' not found in package history. Showing all versions.");
                 }
             }
 
@@ -138,7 +148,9 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
 
     private static bool IsPrerelease(string version) => version.Contains('-', StringComparison.Ordinal);
 
+#pragma warning disable CA1812 // Instantiated via JSON deserialization
     private sealed class VersionIndex
+#pragma warning restore CA1812
     {
         [JsonPropertyName("versions")]
         public List<string>? Versions { get; set; }
