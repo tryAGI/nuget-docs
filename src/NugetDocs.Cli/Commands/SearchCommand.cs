@@ -22,6 +22,7 @@ internal sealed class SearchCommand : Command
         DefaultValueFactory = _ => null,
     };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
+    public Option<bool> JsonOption { get; } = CommonOptions.Json;
 
     public SearchCommand() : base("search", "Search types and members by pattern")
     {
@@ -32,6 +33,7 @@ internal sealed class SearchCommand : Command
         Options.Add(AllOption);
         Options.Add(NamespaceOption);
         Options.Add(OutputOption);
+        Options.Add(JsonOption);
 
         Action = new SearchCommandAction(this);
     }

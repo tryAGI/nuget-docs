@@ -12,7 +12,7 @@ internal sealed class InfoCommandAction(InfoCommand command) : AsynchronousComma
     {
         var package = parseResult.GetValue(command.PackageArgument)!;
         var version = parseResult.GetValue(command.VersionOption);
-        var output = parseResult.GetValue(command.OutputOption);
+        var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
         try
         {
@@ -50,7 +50,7 @@ internal sealed class InfoCommandAction(InfoCommand command) : AsynchronousComma
             var dependencies = metadata.Element(ns + "dependencies");
             var depData = CollectDependencies(dependencies, ns);
 
-            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+            if (jsonOutput)
             {
                 var json = new
                 {

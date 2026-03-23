@@ -15,7 +15,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
         var framework = parseResult.GetValue(command.FrameworkOption);
         var showAll = parseResult.GetValue(command.AllOption);
         var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
-        var output = parseResult.GetValue(command.OutputOption);
+        var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
         try
         {
@@ -29,7 +29,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                 ? allResults.Where(r => r.FullName.StartsWith(namespaceFilter, StringComparison.OrdinalIgnoreCase)).ToList()
                 : allResults;
 
-            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+            if (jsonOutput)
             {
                 var json = new
                 {

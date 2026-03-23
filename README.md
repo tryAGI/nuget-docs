@@ -131,6 +131,7 @@ nuget-docs versions Humanizer --limit 50     # show more (default: 20, 0 = all)
 | `--framework <tfm>` | `-f` | Target framework (auto-detected by default) |
 | `--all` | `-a` | Include internal/private members |
 | `--namespace <prefix>` | `-n` | Filter by namespace prefix |
+| `--json` | `-j` | JSON output (shorthand for `--output json`) |
 | `--output json` | `-o json` | JSON output for programmatic use |
 
 ## Features

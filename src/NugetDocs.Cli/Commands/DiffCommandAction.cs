@@ -20,7 +20,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var noAdditive = parseResult.GetValue(command.NoAdditiveOption);
         if (noAdditive) includeAdditive = false;
         var ignoreDocs = parseResult.GetValue(command.IgnoreDocsOption);
-        var output = parseResult.GetValue(command.OutputOption);
+        var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
         try
         {
@@ -122,7 +122,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             // Determine if there are breaking changes for exit code
             var hasBreaking = removed.Count > 0 || changed.Any(c => c.IsBreaking);
 
-            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+            if (jsonOutput)
             {
                 OutputJson(package, fromResolved, toResolved, filteredAdded, removed, filteredChanged, typeOnly, breakingOnly, memberDiff);
             }

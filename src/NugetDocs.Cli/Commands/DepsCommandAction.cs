@@ -14,7 +14,7 @@ internal sealed class DepsCommandAction(DepsCommand command) : AsynchronousComma
         var version = parseResult.GetValue(command.VersionOption);
         var framework = parseResult.GetValue(command.FrameworkOption);
         var maxDepth = parseResult.GetValue(command.DepthOption);
-        var output = parseResult.GetValue(command.OutputOption);
+        var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
         try
         {
@@ -24,7 +24,7 @@ internal sealed class DepsCommandAction(DepsCommand command) : AsynchronousComma
             var tree = await BuildDependencyTreeAsync(
                 package, resolved.Version, resolved.Framework, maxDepth, cancellationToken).ConfigureAwait(false);
 
-            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+            if (jsonOutput)
             {
                 Console.WriteLine(JsonSerializer.Serialize(tree, JsonOptions.Indented));
             }

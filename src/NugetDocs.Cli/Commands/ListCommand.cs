@@ -18,6 +18,7 @@ internal sealed class ListCommand : Command
         DefaultValueFactory = _ => null,
     };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
+    public Option<bool> JsonOption { get; } = CommonOptions.Json;
 
     public ListCommand() : base("list", "List all public types in a NuGet package")
     {
@@ -27,6 +28,7 @@ internal sealed class ListCommand : Command
         Options.Add(AllOption);
         Options.Add(NamespaceOption);
         Options.Add(OutputOption);
+        Options.Add(JsonOption);
 
         Action = new ListCommandAction(this);
     }

@@ -13,6 +13,7 @@ internal sealed class DepsCommand : Command
         DefaultValueFactory = _ => 1,
     };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
+    public Option<bool> JsonOption { get; } = CommonOptions.Json;
 
     public DepsCommand() : base("deps", "Show dependency tree of a package")
     {
@@ -21,6 +22,7 @@ internal sealed class DepsCommand : Command
         Options.Add(FrameworkOption);
         Options.Add(DepthOption);
         Options.Add(OutputOption);
+        Options.Add(JsonOption);
 
         Action = new DepsCommandAction(this);
     }

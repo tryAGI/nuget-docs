@@ -18,7 +18,7 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
         var since = parseResult.GetValue(command.SinceOption);
         var limit = parseResult.GetValue(command.LimitOption);
         var count = parseResult.GetValue(command.CountOption);
-        var output = parseResult.GetValue(command.OutputOption);
+        var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
         try
         {
@@ -82,7 +82,7 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
 
             if (count)
             {
-                if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+                if (jsonOutput)
                 {
                     Console.WriteLine(JsonSerializer.Serialize(new { package, count = total }, JsonOptions.Indented));
                 }
@@ -93,7 +93,7 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
                 return 0;
             }
 
-            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+            if (jsonOutput)
             {
                 var json = latest
                     ? new

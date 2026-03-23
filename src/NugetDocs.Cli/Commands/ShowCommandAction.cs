@@ -17,7 +17,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
         var memberName = parseResult.GetValue(command.MemberOption);
         var showAssembly = parseResult.GetValue(command.AssemblyOption);
         var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
-        var output = parseResult.GetValue(command.OutputOption);
+        var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
         try
         {
@@ -31,7 +31,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
             {
                 var attrs = inspector.GetAssemblyAttributes(namespaceFilter);
 
-                if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+                if (jsonOutput)
                 {
                     var json = new
                     {
@@ -78,7 +78,7 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
                 source = memberSource;
             }
 
-            if (string.Equals(output, "json", StringComparison.OrdinalIgnoreCase))
+            if (jsonOutput)
             {
                 var resolvedName = inspector.ResolveTypeName(typeName);
                 var json = new

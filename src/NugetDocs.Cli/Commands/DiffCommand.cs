@@ -47,6 +47,7 @@ internal sealed class DiffCommand : Command
         DefaultValueFactory = _ => false,
     };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
+    public Option<bool> JsonOption { get; } = CommonOptions.Json;
 
     public DiffCommand() : base("diff", "Compare public API surface between two versions of a package")
     {
@@ -61,6 +62,7 @@ internal sealed class DiffCommand : Command
         Options.Add(NoAdditiveOption);
         Options.Add(IgnoreDocsOption);
         Options.Add(OutputOption);
+        Options.Add(JsonOption);
 
         Action = new DiffCommandAction(this);
     }

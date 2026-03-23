@@ -37,7 +37,7 @@ Use `nuget-docs` when you need to:
 ### List all public types
 
 ```bash
-nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--output json]
+nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--json] [--output json]
 ```
 
 Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries. Use `--all` (`-a`) to include internal types. Use `--namespace` (`-n`) to filter by namespace prefix.
@@ -45,7 +45,7 @@ Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Del
 ### Show a specific type
 
 ```bash
-nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--assembly] [--namespace <prefix>] [--output json]
+nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--assembly] [--namespace <prefix>] [--json] [--output json]
 ```
 
 Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members. Use `--member` (`-m`) to show only a specific member. Use `--assembly` to show assembly-level attributes instead of a type. Use `--namespace` (`-n`) with `--assembly` to filter attributes by their type's namespace prefix.
@@ -53,7 +53,7 @@ Decompiles the full type to C# source with `///` XML documentation comments. **S
 ### Search types and members
 
 ```bash
-nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--output json]
+nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--json] [--output json]
 ```
 
 Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. By default searches only public/protected members; use `--all` (`-a`) to include private and internal. Use `--namespace` (`-n`) to filter by namespace prefix.
@@ -61,7 +61,7 @@ Searches types and members using glob patterns (`*` and `?` wildcards). Results 
 ### Compare API between versions
 
 ```bash
-nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--type-only] [--breaking] [--member-diff] [--no-additive] [--ignore-docs] [--output json]
+nuget-docs diff <Package> --from <ver> --to <ver> [--framework <tfm>] [--type-only] [--breaking] [--member-diff] [--no-additive] [--ignore-docs] [--json] [--output json]
 ```
 
 Compares the public API surface between two versions of a package. Use `latest` as a version value to auto-resolve the latest stable version from NuGet.org (e.g., `--to latest`). Shows added, removed, and changed types with a unified diff (Myers algorithm) including `@@ -line,count +line,count @@` hunk headers. Use `--type-only` (`-t`) for a quick summary without decompiling. Use `--breaking` (`-b`) to show only potentially breaking changes. Use `--member-diff` (`-m`) to show structured member-level changes (added/removed/changed methods/properties) instead of full source diff. Use `--no-additive` to hide purely additive changes and show only removals/modifications for upgrade safety checks (also available as `--include-additive false`). Use `--ignore-docs` to ignore XML doc comment changes in source-level diff. Works with both source-level and member-level diffs. **Exit codes**: 0 = no breaking changes, 1 = error, 2 = breaking changes detected (useful for CI).
@@ -69,7 +69,7 @@ Compares the public API surface between two versions of a package. Use `latest` 
 ### Package metadata
 
 ```bash
-nuget-docs info <Package> [--version <ver>] [--output json]
+nuget-docs info <Package> [--version <ver>] [--json] [--output json]
 ```
 
 Shows package ID, version, authors, description, license, frameworks, and dependencies.
@@ -77,7 +77,7 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 ### Dependency tree
 
 ```bash
-nuget-docs deps <Package> [--version <ver>] [--framework <tfm>] [--depth <n>] [--output json]
+nuget-docs deps <Package> [--version <ver>] [--framework <tfm>] [--depth <n>] [--json] [--output json]
 ```
 
 Shows the dependency tree of a package with tree-style output. Use `--depth` (`-d`) to control transitive resolution depth (default: 1 = direct only). Use `--depth 2` or higher for transitive dependencies. Shared dependencies are marked with `(already listed)` to avoid confusion.
@@ -85,7 +85,7 @@ Shows the dependency tree of a package with tree-style output. Use `--depth` (`-
 ### List available versions
 
 ```bash
-nuget-docs versions <Package> [--stable] [--prerelease] [--latest] [--since <ver>] [--count] [--limit <n>] [--output json]
+nuget-docs versions <Package> [--stable] [--prerelease] [--latest] [--since <ver>] [--count] [--limit <n>] [--json] [--output json]
 ```
 
 Lists all available versions of a package from NuGet.org, newest first. Use `--stable` (`-s`) to show only stable versions. Use `--prerelease` (`-p`) to show only prerelease versions. Use `--latest` to show only the latest stable and latest prerelease versions. Use `--since` to show only versions newer than the specified version. Use `--count` (`-c`) to output only the count of matching versions (useful for CI). Use `--limit` (`-l`) to control how many to show (default: 20, 0 = all).
@@ -118,7 +118,7 @@ Lists all available versions of a package from NuGet.org, newest first. Use `--s
 - **CI integration**: `diff` returns exit code 2 when breaking changes are detected (0 = clean, 1 = error)
 - **Dependency tree**: Use `deps <pkg>` to see direct dependencies; `--depth 2` for transitive; shared deps show `(already listed)`
 - **Version listing**: Use `versions <pkg>` to see all versions; `--stable` for stable only; `--prerelease` for prerelease only; `--latest` for quick lookup of latest stable + prerelease; `--since <ver>` to see only versions released after a specific version (supports `latest`, `latest-stable`, `latest-prerelease` keywords); `--count` for just the number; useful before `diff`
-- **JSON output**: Use `--output json` (`-o json`) on any command for structured JSON output
+- **JSON output**: Use `--json` (`-j`) or `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down
 - **Version pinning**: Use `--version` to inspect a specific version. Supports `latest`, `latest-stable`, and `latest-prerelease` keywords on any command

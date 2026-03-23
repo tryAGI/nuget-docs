@@ -36,6 +36,7 @@ internal sealed class VersionsCommand : Command
         DefaultValueFactory = _ => false,
     };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
+    public Option<bool> JsonOption { get; } = CommonOptions.Json;
 
     public VersionsCommand() : base("versions", "List all available versions of a package from NuGet.org")
     {
@@ -47,6 +48,7 @@ internal sealed class VersionsCommand : Command
         Options.Add(LimitOption);
         Options.Add(CountOption);
         Options.Add(OutputOption);
+        Options.Add(JsonOption);
 
         Action = new VersionsCommandAction(this);
     }

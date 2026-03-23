@@ -33,6 +33,7 @@ internal sealed class ShowCommand : Command
         DefaultValueFactory = _ => null,
     };
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
+    public Option<bool> JsonOption { get; } = CommonOptions.Json;
 
     public ShowCommand() : base("show", "Show decompiled source for a specific type with XML documentation")
     {
@@ -45,6 +46,7 @@ internal sealed class ShowCommand : Command
         Options.Add(AssemblyOption);
         Options.Add(NamespaceOption);
         Options.Add(OutputOption);
+        Options.Add(JsonOption);
 
         Action = new ShowCommandAction(this);
     }
