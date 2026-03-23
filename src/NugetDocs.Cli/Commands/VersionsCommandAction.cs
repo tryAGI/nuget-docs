@@ -13,6 +13,7 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
     {
         var package = parseResult.GetValue(command.PackageArgument)!;
         var stableOnly = parseResult.GetValue(command.StableOption);
+        var prereleaseOnly = parseResult.GetValue(command.PrereleaseOption);
         var latest = parseResult.GetValue(command.LatestOption);
         var since = parseResult.GetValue(command.SinceOption);
         var limit = parseResult.GetValue(command.LimitOption);
@@ -33,6 +34,10 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
             if (stableOnly)
             {
                 versions = versions.Where(v => !IsPrerelease(v)).ToList();
+            }
+            else if (prereleaseOnly)
+            {
+                versions = versions.Where(IsPrerelease).ToList();
             }
 
             if (since is not null)
@@ -114,6 +119,7 @@ internal sealed class VersionsCommandAction(VersionsCommand command) : Asynchron
                 var parts = new List<string>();
                 if (latest) parts.Add("latest");
                 if (stableOnly) parts.Add("stable only");
+                if (prereleaseOnly) parts.Add("prerelease only");
                 if (since is not null) parts.Add($"since {since}");
                 var filter = parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "";
                 Console.WriteLine($"// Versions: {package}{filter}");

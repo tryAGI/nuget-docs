@@ -10,6 +10,11 @@ internal sealed class VersionsCommand : Command
         Description = "Show only stable versions (exclude prereleases)",
         DefaultValueFactory = _ => false,
     };
+    public Option<bool> PrereleaseOption { get; } = new("--prerelease", "-p")
+    {
+        Description = "Show only prerelease versions",
+        DefaultValueFactory = _ => false,
+    };
     public Option<bool> LatestOption { get; } = new("--latest")
     {
         Description = "Show only the latest stable and latest prerelease versions",
@@ -36,6 +41,7 @@ internal sealed class VersionsCommand : Command
     {
         Arguments.Add(PackageArgument);
         Options.Add(StableOption);
+        Options.Add(PrereleaseOption);
         Options.Add(LatestOption);
         Options.Add(SinceOption);
         Options.Add(LimitOption);
