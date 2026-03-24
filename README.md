@@ -2,15 +2,15 @@
 
 Inspect public API documentation from any NuGet package — decompile types with XML docs, compare API between versions, resolve dependencies. Built for AI agents and CLI workflows.
 
-## Claude Code Skill (Recommended)
+## AI Agent Skill (Recommended)
 
-Install as a [Claude Code skill](https://skills.sh) so your AI agent automatically knows when and how to inspect NuGet packages:
+Install as a [skill](https://skills.sh) so your AI coding agent automatically knows when and how to inspect NuGet packages:
 
 ```bash
 npx skills add tryAGI/nuget-docs -g
 ```
 
-This teaches Claude Code to run `nuget-docs` commands when you ask questions like *"what methods does IChatClient have?"* or *"show me the ChatOptions class"*.
+Works with Claude Code, Cursor, Windsurf, and other AI coding agents. This teaches your agent to run `nuget-docs` commands when you ask questions like *"what methods does IChatClient have?"* or *"show me the ChatOptions class"*.
 
 ## CLI Installation
 
