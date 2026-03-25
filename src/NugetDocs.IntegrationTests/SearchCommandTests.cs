@@ -81,4 +81,15 @@ public class SearchCommandTests
         output.Should().Contain("netstandard2.0");
         output.Should().Contain("JToken");
     }
+
+    [TestMethod]
+    public async Task Search_OutputJsonLongForm()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Convert*", "--output", "json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"results\"");
+        output.Should().Contain("\"count\"");
+    }
 }

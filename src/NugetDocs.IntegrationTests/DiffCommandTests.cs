@@ -127,4 +127,26 @@ public class DiffCommandTests
         output.Should().Contain("Newtonsoft.Json");
         output.Should().Contain("netstandard2.0");
     }
+
+    [TestMethod]
+    public async Task Diff_OutputJsonLongForm()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "13.0.1", "--to", "13.0.3",
+            "--type-only", "--output", "json");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("\"package\"");
+        output.Should().Contain("\"from\"");
+    }
+
+    [TestMethod]
+    public async Task Diff_VersionKeywords_LatestStable()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "13.0.1", "--to", "latest-stable", "--type-only");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("Newtonsoft.Json");
+    }
 }

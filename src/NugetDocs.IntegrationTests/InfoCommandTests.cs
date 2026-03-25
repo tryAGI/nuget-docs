@@ -46,4 +46,15 @@ public class InfoCommandTests
         output.Should().Contain("13.0.1");
         output.Should().Contain("Newtonsoft.Json");
     }
+
+    [TestMethod]
+    public async Task Info_OutputJsonLongForm()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "info", "Newtonsoft.Json", "--output", "json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"id\"");
+        output.Should().Contain("\"authors\"");
+    }
 }

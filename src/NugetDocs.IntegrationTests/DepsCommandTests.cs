@@ -90,4 +90,15 @@ public class DepsCommandTests
         output.Should().Contain("Dependencies:");
         output.Should().Contain("Microsoft.Extensions.AI.Abstractions");
     }
+
+    [TestMethod]
+    public async Task Deps_OutputJsonLongForm()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--output", "json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"Id\"");
+        output.Should().Contain("\"Dependencies\"");
+    }
 }

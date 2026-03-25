@@ -121,4 +121,14 @@ public class VersionsCommandTests
         exitCode.Should().Be(0);
         output.Should().Contain("deprecated");
     }
+
+    [TestMethod]
+    public async Task Versions_OutputJsonLongForm()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "versions", "Newtonsoft.Json", "--output", "json", "--limit", "3");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"versions\"");
+    }
 }
