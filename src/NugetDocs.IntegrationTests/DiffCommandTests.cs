@@ -149,4 +149,14 @@ public class DiffCommandTests
         exitCode.Should().BeOneOf(0, 2);
         output.Should().Contain("Newtonsoft.Json");
     }
+
+    [TestMethod]
+    public async Task Diff_VersionKeywords_BothDynamic()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Humanizer.Core", "--from", "latest-stable", "--to", "latest-prerelease", "--type-only");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("Humanizer.Core");
+    }
 }
