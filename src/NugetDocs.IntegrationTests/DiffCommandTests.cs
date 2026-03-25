@@ -115,4 +115,16 @@ public class DiffCommandTests
         exitCode.Should().BeOneOf(0, 2);
         output.Should().StartWith("Change,Kind,FullName,Breaking");
     }
+
+    [TestMethod]
+    public async Task Diff_FrameworkFilter()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "13.0.1", "--to", "13.0.3",
+            "--type-only", "--framework", "netstandard2.0");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("Newtonsoft.Json");
+        output.Should().Contain("netstandard2.0");
+    }
 }

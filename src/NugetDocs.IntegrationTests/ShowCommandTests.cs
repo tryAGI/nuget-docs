@@ -88,4 +88,14 @@ public class ShowCommandTests
         output.Should().Contain("netstandard2.0");
         output.Should().Contain("class JsonConvert");
     }
+
+    [TestMethod]
+    public async Task Show_OutputJsonLongForm()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert", "--output", "json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"source\"");
+    }
 }

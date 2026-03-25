@@ -93,4 +93,15 @@ public class ListCommandTests
         output.Should().Contain("netstandard2.0");
         output.Should().Contain("JsonConvert");
     }
+
+    [TestMethod]
+    public async Task List_OutputJsonLongForm()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json", "--output", "json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"package\"");
+        output.Should().Contain("\"types\"");
+    }
 }
