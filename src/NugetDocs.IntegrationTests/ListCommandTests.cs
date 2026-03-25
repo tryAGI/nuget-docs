@@ -82,4 +82,15 @@ public class ListCommandTests
         output.Should().Contain("13.0.1");
         output.Should().Contain("JsonConvert");
     }
+
+    [TestMethod]
+    public async Task List_FrameworkFilter()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json", "--framework", "netstandard2.0");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("netstandard2.0");
+        output.Should().Contain("JsonConvert");
+    }
 }

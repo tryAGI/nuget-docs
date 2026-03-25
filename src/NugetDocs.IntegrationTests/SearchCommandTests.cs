@@ -70,4 +70,15 @@ public class SearchCommandTests
         exitCode2.Should().Be(0);
         outputAll.Length.Should().BeGreaterThanOrEqualTo(outputPublic.Length);
     }
+
+    [TestMethod]
+    public async Task Search_FrameworkFilter()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--framework", "netstandard2.0");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("netstandard2.0");
+        output.Should().Contain("JToken");
+    }
 }

@@ -79,4 +79,15 @@ public class DepsCommandTests
         exitCode.Should().Be(0);
         output.Should().Contain("13.0.1");
     }
+
+    [TestMethod]
+    public async Task Deps_FrameworkFilter()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--framework", "net10.0");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("Dependencies:");
+        output.Should().Contain("Microsoft.Extensions.AI.Abstractions");
+    }
 }

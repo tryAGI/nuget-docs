@@ -77,4 +77,15 @@ public class ShowCommandTests
         exitCode2.Should().Be(0);
         outputAll.Length.Should().BeGreaterThanOrEqualTo(outputPublic.Length);
     }
+
+    [TestMethod]
+    public async Task Show_FrameworkFilter()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert", "--framework", "netstandard2.0");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("netstandard2.0");
+        output.Should().Contain("class JsonConvert");
+    }
 }

@@ -103,4 +103,66 @@ public class ErrorTests
         error.Should().Contain("meta-package");
         error.Should().Contain("Try: Humanizer.Core");
     }
+
+    [TestMethod]
+    public async Task Show_InvalidVersion_ReturnsError()
+    {
+        var (exitCode, _, error) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert", "--version", "999.999.999");
+
+        exitCode.Should().Be(1);
+        error.Should().Contain("Error:");
+    }
+
+    [TestMethod]
+    public async Task Search_InvalidVersion_ReturnsError()
+    {
+        var (exitCode, _, error) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--version", "999.999.999");
+
+        exitCode.Should().Be(1);
+        error.Should().Contain("Error:");
+    }
+
+    [TestMethod]
+    public async Task Diff_InvalidFromVersion_ReturnsError()
+    {
+        var (exitCode, _, error) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "999.999.999", "--to", "13.0.1");
+
+        exitCode.Should().Be(1);
+        error.Should().Contain("Error:");
+    }
+
+    [TestMethod]
+    public async Task Search_NoResults_ReturnsEmpty()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*ZzzNonExistentPattern999*");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("Results: 0");
+    }
+
+    [TestMethod]
+    public async Task Search_MetaPackage_SuggestsDependencies()
+    {
+        var (exitCode, _, error) = await CliTestHelper.RunAsync(
+            "search", "Humanizer", "*Core*");
+
+        exitCode.Should().Be(1);
+        error.Should().Contain("meta-package");
+        error.Should().Contain("Try: Humanizer.Core");
+    }
+
+    [TestMethod]
+    public async Task Show_MetaPackage_SuggestsDependencies()
+    {
+        var (exitCode, _, error) = await CliTestHelper.RunAsync(
+            "show", "Humanizer", "SomeType");
+
+        exitCode.Should().Be(1);
+        error.Should().Contain("meta-package");
+        error.Should().Contain("Try: Humanizer.Core");
+    }
 }
