@@ -98,4 +98,14 @@ public class ShowCommandTests
         exitCode.Should().Be(0);
         output.Should().Contain("\"source\"");
     }
+
+    [TestMethod]
+    public async Task Show_VersionKeyword_LatestStable()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert", "--version", "latest-stable");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("class JsonConvert");
+    }
 }

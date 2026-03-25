@@ -92,4 +92,14 @@ public class SearchCommandTests
         output.Should().Contain("\"results\"");
         output.Should().Contain("\"count\"");
     }
+
+    [TestMethod]
+    public async Task Search_VersionKeyword_LatestStable()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--version", "latest-stable");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("JToken");
+    }
 }
