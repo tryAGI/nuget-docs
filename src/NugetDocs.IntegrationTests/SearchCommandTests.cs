@@ -57,4 +57,17 @@ public class SearchCommandTests
         output.Should().Contain("JToken");
         output.Should().NotContain("Newtonsoft.Json.JsonToken");
     }
+
+    [TestMethod]
+    public async Task Search_AllIncludesInternalMembers()
+    {
+        var (exitCode, outputPublic, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Serialize*");
+        var (exitCode2, outputAll, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Serialize*", "--all");
+
+        exitCode.Should().Be(0);
+        exitCode2.Should().Be(0);
+        outputAll.Length.Should().BeGreaterThanOrEqualTo(outputPublic.Length);
+    }
 }

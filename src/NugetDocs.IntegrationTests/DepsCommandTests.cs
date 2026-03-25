@@ -57,4 +57,26 @@ public class DepsCommandTests
         output.Should().Contain("Humanizer");
         output.Should().Contain("Humanizer.Core");
     }
+
+    [TestMethod]
+    public async Task Deps_DepthLimit()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--depth", "1");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("Dependencies:");
+        // Depth 1 should show direct deps but not deep transitive ones
+        output.Should().Contain("Microsoft.Extensions.AI.Abstractions");
+    }
+
+    [TestMethod]
+    public async Task Deps_SpecificVersion()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "deps", "Newtonsoft.Json", "--version", "13.0.1");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("13.0.1");
+    }
 }

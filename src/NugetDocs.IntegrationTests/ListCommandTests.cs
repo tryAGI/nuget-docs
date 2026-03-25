@@ -57,4 +57,29 @@ public class ListCommandTests
         output.Should().Contain("JToken");
         output.Should().NotContain("JsonConvert");
     }
+
+    [TestMethod]
+    public async Task List_AllIncludesInternalTypes()
+    {
+        var (exitCode, outputPublic, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json");
+        var (exitCode2, outputAll, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json", "--all");
+
+        exitCode.Should().Be(0);
+        exitCode2.Should().Be(0);
+        // --all should return at least as many types as public-only
+        outputAll.Length.Should().BeGreaterThanOrEqualTo(outputPublic.Length);
+    }
+
+    [TestMethod]
+    public async Task List_SpecificVersion()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json", "--version", "13.0.1");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("13.0.1");
+        output.Should().Contain("JsonConvert");
+    }
 }

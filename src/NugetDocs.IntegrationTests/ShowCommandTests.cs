@@ -43,4 +43,38 @@ public class ShowCommandTests
         exitCode.Should().Be(0);
         output.Should().Contain("assembly:");
     }
+
+    [TestMethod]
+    public async Task Show_JsonOutput()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert", "--json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"source\"");
+    }
+
+    [TestMethod]
+    public async Task Show_SpecificVersion()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert", "--version", "13.0.1");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("13.0.1");
+        output.Should().Contain("class JsonConvert");
+    }
+
+    [TestMethod]
+    public async Task Show_AllIncludesInternalTypes()
+    {
+        var (exitCode, outputPublic, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert");
+        var (exitCode2, outputAll, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert", "--all");
+
+        exitCode.Should().Be(0);
+        exitCode2.Should().Be(0);
+        outputAll.Length.Should().BeGreaterThanOrEqualTo(outputPublic.Length);
+    }
 }

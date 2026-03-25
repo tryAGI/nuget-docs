@@ -35,4 +35,15 @@ public class InfoCommandTests
         output.Should().Contain("Humanizer");
         output.Should().Contain("Dependencies:");
     }
+
+    [TestMethod]
+    public async Task Info_SpecificVersion()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "info", "Newtonsoft.Json", "--version", "13.0.1");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("13.0.1");
+        output.Should().Contain("Newtonsoft.Json");
+    }
 }
