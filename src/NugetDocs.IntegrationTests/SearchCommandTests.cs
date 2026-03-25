@@ -46,4 +46,15 @@ public class SearchCommandTests
         exitCode.Should().Be(0);
         output.Should().StartWith("Kind,MemberKind,Name,FullName");
     }
+
+    [TestMethod]
+    public async Task Search_NamespaceFilter()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--namespace", "Newtonsoft.Json.Linq");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("JToken");
+        output.Should().NotContain("Newtonsoft.Json.JsonToken");
+    }
 }

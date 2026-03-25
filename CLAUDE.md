@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build everything
 dotnet build nuget-docs.slnx
 
-# Run integration tests (42 tests, hits NuGet.org)
+# Run integration tests (60 tests, hits NuGet.org)
 dotnet test src/NugetDocs.IntegrationTests/
 
 # Run a single test

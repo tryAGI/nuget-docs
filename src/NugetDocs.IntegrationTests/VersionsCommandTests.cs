@@ -101,4 +101,24 @@ public class VersionsCommandTests
         exitCode.Should().Be(0);
         output.Should().Contain("\"versions\"");
     }
+
+    [TestMethod]
+    public async Task Versions_PrereleaseOnly()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "versions", "Humanizer", "--prerelease", "--limit", "5");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("prerelease only");
+    }
+
+    [TestMethod]
+    public async Task Versions_DeprecatedFlag()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "versions", "WindowsAzure.Storage", "--deprecated", "--limit", "3");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("deprecated");
+    }
 }
