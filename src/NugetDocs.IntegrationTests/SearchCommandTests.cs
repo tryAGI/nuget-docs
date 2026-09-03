@@ -102,4 +102,89 @@ public class SearchCommandTests
         exitCode.Should().Be(0);
         output.Should().Contain("JToken");
     }
+
+    [TestMethod]
+    public async Task Search_ExplicitLimit_IsHonored()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--limit", "5", "--format", "csv");
+
+        exitCode.Should().Be(0);
+        CountRows(output).Should().Be(5);
+    }
+
+    [TestMethod]
+    public async Task Search_TruncationFooter_AndResultsLine()
+    {
+        // 33 public matches for *Token*, capped at 5 — the header states both numbers.
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--limit", "5");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("(showing 5)");
+        output.Should().Contain("... and ");
+        output.Should().Contain("narrow the pattern");
+    }
+
+    [TestMethod]
+    public async Task Search_LimitZero_ShowsAll()
+    {
+        var (exitCode, limited, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--limit", "5", "--format", "csv");
+        var (exitCode2, all, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--limit", "0", "--format", "csv");
+
+        exitCode.Should().Be(0);
+        exitCode2.Should().Be(0);
+        // CSV stays machine-parseable — the footer is a text/table-format affordance only.
+        limited.Should().NotContain("... and ");
+        all.Should().NotContain("... and ");
+        CountRows(all).Should().BeGreaterThan(CountRows(limited));
+    }
+
+    [TestMethod]
+    public async Task Search_NoTruncationFooter_WhenUnderLimit()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*");
+
+        exitCode.Should().Be(0);
+        output.Should().NotContain("... and ");
+        output.Should().NotContain("(showing ");
+    }
+
+    [TestMethod]
+    public async Task Search_TableFormat_ShowsTruncationFooter()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--limit", "5", "--format", "table");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("... and ");
+        output.Should().Contain("--limit 0 to show all");
+    }
+
+    [TestMethod]
+    public async Task Search_JsonReportsTotalAndTruncated()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--limit", "5", "--json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"count\": 5");
+        output.Should().Contain("\"total\"");
+        output.Should().Contain("\"truncated\": true");
+
+        var (exitCode2, full, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Token*", "--limit", "0", "--json");
+
+        exitCode2.Should().Be(0);
+        full.Should().Contain("\"truncated\": false");
+    }
+
+    private static int CountRows(string csv)
+    {
+        // Subtract the header line.
+        return csv.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length - 1;
+    }
 }

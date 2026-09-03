@@ -21,6 +21,7 @@ internal sealed class SearchCommand : Command
         Description = "Filter results by namespace prefix",
         DefaultValueFactory = _ => null,
     };
+    public Option<int> LimitOption { get; } = CommonOptions.Limit;
     public Option<string?> FormatOption { get; } = CommonOptions.Format;
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
     public Option<bool> JsonOption { get; } = CommonOptions.Json;
@@ -33,6 +34,7 @@ internal sealed class SearchCommand : Command
         Options.Add(FrameworkOption);
         Options.Add(AllOption);
         Options.Add(NamespaceOption);
+        Options.Add(LimitOption);
         Options.Add(FormatOption);
         Options.Add(OutputOption);
         Options.Add(JsonOption);

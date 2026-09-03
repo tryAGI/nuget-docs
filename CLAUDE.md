@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build everything
 dotnet build nuget-docs.slnx
 
-# Run integration tests (96 tests, hits NuGet.org)
+# Run integration tests (108 tests, hits NuGet.org)
 dotnet test src/NugetDocs.IntegrationTests/
 
 # Run a single test
@@ -57,6 +57,15 @@ Centralized factory properties for reusable CLI options: `Package`, `Version`, `
 ### Output Formats
 
 All commands support `--json` / `--output json`. Commands with tabular data (`list`, `search`, `versions`, `deps`) also support `--format table|csv`. The default grouped format is plain text optimized for AI consumption.
+
+### Result Limits
+
+`list` and `search` truncate at `CommonOptions.DefaultResultLimit` (200) rows; `versions` at 20. `--limit 0` disables the cap. The shared helpers live in `CommonOptions`: `ApplyLimit` trims the collection, `WriteTruncationFooter` writes the `... and N more (use --limit 0 to show all, or <hint>)` line.
+
+Rules when adding a limit to a new command:
+- Capture `total` **before** trimming — text/table headers and the JSON `total`/`truncated` fields report the pre-limit figure.
+- Apply the limit to every output mode, JSON and CSV included, so consumers never see a different row count than the text mode.
+- Never write the footer in CSV mode — CSV must stay machine-parseable.
 
 ### Test Infrastructure
 

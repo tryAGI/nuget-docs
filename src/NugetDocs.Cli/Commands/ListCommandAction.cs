@@ -14,6 +14,7 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
         var framework = parseResult.GetValue(command.FrameworkOption);
         var showAll = parseResult.GetValue(command.AllOption);
         var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
+        var limit = parseResult.GetValue(command.LimitOption);
         var format = parseResult.GetValue(command.FormatOption);
         var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
@@ -26,9 +27,13 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
             var xmlDocs = XmlDocReader.TryLoad(resolved.XmlDocPath);
             var allTypes = inspector.GetTypes(publicOnly: !showAll);
 
-            var types = namespaceFilter is not null
+            var filtered = namespaceFilter is not null
                 ? allTypes.Where(t => t.Namespace.StartsWith(namespaceFilter, StringComparison.OrdinalIgnoreCase)).ToList()
                 : allTypes;
+
+            var total = filtered.Count;
+            var types = CommonOptions.ApplyLimit(filtered, limit);
+            const string NarrowHint = "--namespace to narrow";
 
             if (jsonOutput)
             {
@@ -37,6 +42,8 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
                     package = resolved.PackageId,
                     version = resolved.Version,
                     framework = resolved.Framework,
+                    total,
+                    truncated = types.Count < total,
                     types = types.Select(t => new
                     {
                         kind = t.Kind,
@@ -88,6 +95,8 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
                 {
                     Console.WriteLine($"  {row.Kind.PadRight(colKind)}  {row.Name.PadRight(colName)}  {row.Namespace.PadRight(colNs)}  {row.Summary}");
                 }
+
+                CommonOptions.WriteTruncationFooter(total, limit, NarrowHint);
             }
             else
             {
@@ -117,6 +126,8 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
 
                     Console.WriteLine();
                 }
+
+                CommonOptions.WriteTruncationFooter(total, limit, NarrowHint, leadingBlankLine: false);
             }
 
             return 0;

@@ -60,6 +60,47 @@ internal static class CommonOptions
     };
 
     /// <summary>
+    /// Default maximum number of rows emitted by <c>list</c> and <c>search</c> before truncation.
+    /// High enough to leave a typical package's full listing intact (Newtonsoft.Json lists 144 public
+    /// types, Microsoft.Extensions.AI.Abstractions 159) while capping pathological ones
+    /// (AWSSDK.EC2 lists 5,566) so an agent's context window is not exhausted by a single command.
+    /// </summary>
+    public const int DefaultResultLimit = 200;
+
+    public static Option<int> Limit => new(
+        name: "--limit",
+        aliases: ["-l"])
+    {
+        Description = $"Maximum number of results to show (default: {DefaultResultLimit}, 0 = all)",
+        DefaultValueFactory = _ => DefaultResultLimit,
+    };
+
+    /// <summary>
+    /// Applies a result limit, returning the trimmed list. A limit of 0 or less means "no limit".
+    /// </summary>
+    public static IReadOnlyList<T> ApplyLimit<T>(IReadOnlyList<T> items, int limit)
+    {
+        return limit > 0 && items.Count > limit ? items.Take(limit).ToList() : items;
+    }
+
+    /// <summary>
+    /// Writes the footer shown when a limit hid some results. No-op when nothing was truncated.
+    /// </summary>
+    public static void WriteTruncationFooter(int total, int limit, string narrowHint, bool leadingBlankLine = true)
+    {
+        if (limit <= 0 || total <= limit)
+        {
+            return;
+        }
+
+        if (leadingBlankLine)
+        {
+            Console.WriteLine();
+        }
+        Console.WriteLine($"  ... and {total - limit} more (use --limit 0 to show all, or {narrowHint})");
+    }
+
+    /// <summary>
     /// Escape a value for CSV output (RFC 4180).
     /// </summary>
     public static string CsvEscape(string value)

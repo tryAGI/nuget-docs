@@ -15,6 +15,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
         var framework = parseResult.GetValue(command.FrameworkOption);
         var showAll = parseResult.GetValue(command.AllOption);
         var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
+        var limit = parseResult.GetValue(command.LimitOption);
         var format = parseResult.GetValue(command.FormatOption);
         var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
@@ -26,9 +27,18 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
             using var inspector = new TypeInspector(resolved.DllPath!, resolved.XmlDocPath);
             var allResults = inspector.SearchTypes(pattern, publicOnly: !showAll);
 
-            var results = namespaceFilter is not null
+            var filtered = namespaceFilter is not null
                 ? allResults.Where(r => r.FullName.StartsWith(namespaceFilter, StringComparison.OrdinalIgnoreCase)).ToList()
                 : allResults;
+
+            var total = filtered.Count;
+            var results = CommonOptions.ApplyLimit(filtered, limit);
+            const string NarrowHint = "narrow the pattern";
+
+            // Shown next to "Results:" so a truncated listing states both numbers.
+            var resultsLine = results.Count < total
+                ? $"{total} (showing {results.Count})"
+                : total.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             if (jsonOutput)
             {
@@ -39,6 +49,8 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                     framework = resolved.Framework,
                     pattern,
                     count = results.Count,
+                    total,
+                    truncated = results.Count < total,
                     results = results.Select(r => new
                     {
                         kind = r.Kind,
@@ -61,7 +73,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
             {
                 Console.WriteLine($"Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
                 Console.WriteLine($"Pattern: {pattern}");
-                Console.WriteLine($"Results: {results.Count}");
+                Console.WriteLine($"Results: {resultsLine}");
                 Console.WriteLine();
 
                 var rows = results.Select(r => new
@@ -81,12 +93,14 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                 {
                     Console.WriteLine($"  {row.Kind.PadRight(colKind)}  {row.Name.PadRight(colName)}  {row.FullName}");
                 }
+
+                CommonOptions.WriteTruncationFooter(total, limit, NarrowHint);
             }
             else
             {
                 Console.WriteLine($"Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
                 Console.WriteLine($"Pattern: {pattern}");
-                Console.WriteLine($"Results: {results.Count}");
+                Console.WriteLine($"Results: {resultsLine}");
                 Console.WriteLine();
 
                 foreach (var result in results)
@@ -97,6 +111,8 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
 
                     Console.WriteLine($"  [{kindLabel}] {result.FullName}");
                 }
+
+                CommonOptions.WriteTruncationFooter(total, limit, NarrowHint);
             }
 
             return 0;

@@ -37,10 +37,10 @@ Use `nuget-docs` when you need to:
 ### List all public types
 
 ```bash
-nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--format table|csv] [--json] [--output json]
+nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--limit <n>] [--format table|csv] [--json] [--output json]
 ```
 
-Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries. Use `--all` (`-a`) to include internal types. Use `--namespace` (`-n`) to filter by namespace prefix. Use `--format table` for aligned columns or `--format csv` for CSV output.
+Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries. Use `--all` (`-a`) to include internal types. Use `--namespace` (`-n`) to filter by namespace prefix. Use `--format table` for aligned columns or `--format csv` for CSV output. **Capped at 200 types by default** — use `--limit <n>` to change it or `--limit 0` for the full listing.
 
 ### Show a specific type
 
@@ -53,10 +53,10 @@ Decompiles the full type to C# source with `///` XML documentation comments. **S
 ### Search types and members
 
 ```bash
-nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--format table|csv] [--json] [--output json]
+nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--limit <n>] [--format table|csv] [--json] [--output json]
 ```
 
-Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. By default searches only public/protected members; use `--all` (`-a`) to include private and internal. Use `--namespace` (`-n`) to filter by namespace prefix. Use `--format table` for aligned columns or `--format csv` for CSV output.
+Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. By default searches only public/protected members; use `--all` (`-a`) to include private and internal. Use `--namespace` (`-n`) to filter by namespace prefix. Use `--format table` for aligned columns or `--format csv` for CSV output. **Capped at 200 results by default** — use `--limit <n>` to change it or `--limit 0` for everything.
 
 ### Compare API between versions
 
@@ -90,6 +90,40 @@ nuget-docs versions <Package> [--stable] [--prerelease] [--latest] [--since <ver
 
 Lists all available versions of a package from NuGet.org, newest first. Use `--stable` (`-s`) to show only stable versions. Use `--prerelease` (`-p`) to show only prerelease versions. Use `--latest` to show only the latest stable and latest prerelease versions. Use `--since` to show only versions newer than the specified version. Use `--count` (`-c`) to output only the count of matching versions (useful for CI). Use `--deprecated` to show deprecation and vulnerability info for each version. Use `--format table` for aligned columns or `--format csv` for CSV output. Use `--limit` (`-l`) to control how many to show (default: 20, 0 = all).
 
+## Context Budgeting
+
+Output size is the main cost of this tool. Each command returns one narrow slice by design, and
+nothing here summarizes for you — so pick the narrowest command that answers the question.
+
+**Rough sizes** (Newtonsoft.Json 13.0.4, measured):
+
+| Command | Lines | Notes |
+|---------|-------|-------|
+| `search <pkg> "JToken*"` | 9 | Cheapest way to locate something |
+| `list <pkg> --namespace Newtonsoft.Json.Linq` | 35 | Namespace-scoped listing |
+| `show <pkg> JsonConvert --member SerializeObject` | 149 | One member, all overloads |
+| `list <pkg>` | 156 | Names + one-line summaries, no bodies |
+| `show <pkg> JsonConvert` | 972 | Full decompiled type — the expensive call |
+
+**The funnel** — do not start at `show` on an unfamiliar package:
+
+1. `search <pkg> "<Pattern>*"` — find the type name (a few lines)
+2. `list <pkg> --namespace <Prefix>` — scope the listing if you need neighbours
+3. `show <pkg> <Type> --member <Name>` — read one member
+4. `show <pkg> <Type>` — only when you genuinely need the whole type
+
+**Large packages.** `list` and `search` cap at 200 rows by default and print
+`... and N more (use --limit 0 to show all, or ...)` when they truncate. The cap is a guardrail,
+not an answer: when you see that footer, **narrow with `--namespace` or a tighter pattern** rather
+than reaching for `--limit 0`. Uncapped, `list AWSSDK.EC2` is 5,572 lines (~908 KB); capped it is
+207 lines (~20 KB).
+
+`show` is not capped — it decompiles exactly one type, and a very large type (e.g. an AWS service
+client) can still be thousands of lines. Prefer `--member` when you know what you are after.
+
+For `diff`, `--type-only` skips decompilation entirely and is the cheapest way to see what moved
+between versions; add `--breaking` or `--no-additive` to cut it further.
+
 ## Efficient Usage Patterns
 
 1. **Start broad**: `nuget-docs list <pkg>` to see all public types
@@ -122,7 +156,8 @@ Lists all available versions of a package from NuGet.org, newest first. Use `--s
 - **Alternative output formats**: Use `--format table` with `list`, `search`, `versions`, `deps`, or `diff` for aligned columns, or `--format csv` for CSV output (useful for piping to other tools)
 - **JSON output**: Use `--json` (`-j`) or `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
-- **For large packages**: Use `search` before `show` to narrow down
+- **For large packages**: Use `search` before `show` to narrow down. `list`/`search` truncate at 200 rows by default — when you see the `... and N more` footer, narrow with `--namespace` or a tighter pattern instead of `--limit 0`
+- **Result limit**: `--limit <n>` (`-l`) sets the cap on `list`/`search` (default 200, `0` = unlimited). JSON output carries `total` and `truncated` so you can tell when rows were hidden; CSV output is trimmed but never gets a footer, so it stays parseable
 - **Version pinning**: Use `--version` to inspect a specific version. Supports `latest`, `latest-stable`, and `latest-prerelease` keywords on any command
 
 ## Examples

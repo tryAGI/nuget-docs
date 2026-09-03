@@ -42,9 +42,14 @@ nuget-docs diff Microsoft.Extensions.AI.Abstractions --from 10.3.0 --to latest
 nuget-docs list Microsoft.Extensions.AI.Abstractions
 nuget-docs list Newtonsoft.Json --namespace Newtonsoft.Json.Linq
 nuget-docs list Humanizer --all          # include internal types
+nuget-docs list AWSSDK.EC2 --limit 50    # cap the listing (default: 200, 0 = all)
 nuget-docs list Newtonsoft.Json --format table  # aligned columns
 nuget-docs list Newtonsoft.Json --format csv    # CSV output
 ```
+
+Capped at 200 types by default so a huge package can't flood an agent's context — uncapped,
+`list AWSSDK.EC2` is 5,572 lines. When truncated it prints
+`... and N more (use --limit 0 to show all, or --namespace to narrow)`.
 
 ### `show` — Decompile a type with XML docs
 
@@ -63,9 +68,11 @@ nuget-docs search Microsoft.Extensions.AI.Abstractions "Chat*"
 nuget-docs search Newtonsoft.Json "*Token*" --namespace Newtonsoft.Json.Linq
 nuget-docs search Newtonsoft.Json "*Token*" --format table  # aligned columns
 nuget-docs search Newtonsoft.Json "*Convert*" --format csv  # CSV output
+nuget-docs search AWSSDK.EC2 "*SecurityGroup*" --limit 50   # cap results (default: 200, 0 = all)
 ```
 
-Uses glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels.
+Uses glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. Capped at 200
+results by default; the header reads `Results: 833 (showing 200)` when truncated.
 
 ### `diff` — Compare API between versions
 
@@ -140,6 +147,7 @@ nuget-docs versions Humanizer --format csv              # CSV output
 | `--framework <tfm>` | `-f` | Target framework (auto-detected by default) |
 | `--all` | `-a` | Include internal/private members |
 | `--namespace <prefix>` | `-n` | Filter by namespace prefix |
+| `--limit <n>` | `-l` | Maximum rows for `list`/`search` (default: 200, `0` = all) and `versions` (default: 20, `0` = all) |
 | `--format <fmt>` | | Output format for `list`/`search`/`versions`/`deps`/`diff`: `grouped` (default), `table`, `csv` |
 | `--deprecated` | | Show deprecation/vulnerability info (for `versions`) |
 | `--json` | `-j` | JSON output (shorthand for `--output json`) |
@@ -158,6 +166,7 @@ nuget-docs versions Humanizer --format csv              # CSV output
 - Deprecation and vulnerability detection from NuGet registry
 - Version listing with stable/latest filters
 - Framework-aware: picks best matching TFM (net10.0 > net9.0 > ... > netstandard2.0)
+- Context-budgeted output — `list`/`search` cap at 200 rows with a `... and N more` footer; JSON carries `total`/`truncated`
 - AI-optimized plain text output
 - JSON output on all commands
 - Tab completion via `dotnet-suggest`
