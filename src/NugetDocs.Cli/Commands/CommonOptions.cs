@@ -134,6 +134,54 @@ internal static class CommonOptions
     }
 
     /// <summary>
+    /// Renders items grouped by kind: a pluralized heading, two-space indented lines, and a blank
+    /// line after each group. Shared by <c>list</c> (types) and <c>show --signatures</c> (members).
+    /// Writing goes through <paramref name="write"/> so callers can target the console or a buffer.
+    /// </summary>
+    public static void WriteGroupedByKind<T>(
+        IEnumerable<T> items,
+        Func<T, string> kind,
+        Func<T, string> line,
+        Action<string> write,
+        Func<string, int>? order = null)
+    {
+        var groups = items.GroupBy(kind);
+        var ordered = order is not null
+            ? groups.OrderBy(g => order(g.Key))
+            : groups.OrderBy(g => g.Key, StringComparer.Ordinal);
+
+        foreach (var group in ordered)
+        {
+            write($"{Pluralize(group.Key)}:");
+
+            foreach (var item in group)
+            {
+                write($"  {line(item)}");
+            }
+
+            write("");
+        }
+    }
+
+    /// <summary>
+    /// Pluralizes a type or member kind for a group heading: Property -> Properties,
+    /// Class -> Classes, Method -> Methods.
+    /// </summary>
+    public static string Pluralize(string kind)
+    {
+        // Consonant + y -> ies (Property -> Properties), but not vowel + y (Key -> Keys).
+        if (kind.Length > 1 && kind.EndsWith('y') && !"aeiou".Contains(char.ToLowerInvariant(kind[^2]), StringComparison.Ordinal))
+        {
+            return string.Concat(kind.AsSpan(0, kind.Length - 1), "ies");
+        }
+
+        var needsEs = kind.EndsWith('s') || kind.EndsWith('x') || kind.EndsWith('z') ||
+            kind.EndsWith("ch", StringComparison.Ordinal) || kind.EndsWith("sh", StringComparison.Ordinal);
+
+        return needsEs ? $"{kind}es" : $"{kind}s";
+    }
+
+    /// <summary>
     /// Escape a value for CSV output (RFC 4180).
     /// </summary>
     public static string CsvEscape(string value)

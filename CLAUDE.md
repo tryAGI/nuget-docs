@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build everything
 dotnet build nuget-docs.slnx
 
-# Run integration tests (121 tests, hits NuGet.org)
+# Run integration tests (123 tests, hits NuGet.org)
 dotnet test src/NugetDocs.IntegrationTests/
 
 # Run a single test
@@ -69,6 +69,18 @@ Rules when adding a limit to a new command:
 - Apply the limit to every output mode, JSON and CSV included, so consumers never see a different row count than the text mode.
 - Never write the footer in CSV mode — CSV must stay machine-parseable.
 - Any test that compares "more content" by output **character length** breaks once a cap applies — internal members carry no XML docs, so a capped larger listing can be shorter text. Compare row counts, or pass `--limit 0` / `--max-lines 0` on both sides.
+
+### Grouped Output
+
+`CommonOptions.WriteGroupedByKind` renders the "pluralized heading + two-space indented lines +
+trailing blank line" layout shared by `list` (types, ordered by `GetKindOrder`) and
+`show --signatures` (members, alphabetical). It writes through an `Action<string>` so `list` can
+target `Console.WriteLine` while `show` buffers into a `StringBuilder` for the line cap.
+`CommonOptions.Pluralize` handles the kind headings (Property -> Properties, Class -> Classes).
+
+`show --signatures` reads the ILSpy type system without calling `DecompileType`, so it is ~35x
+faster than a full decompile (0.11s vs 3.9s on AWSSDK.EC2's AmazonEC2Client), not merely smaller.
+The `--max-lines` cap does not share that saving: the type is decompiled first and trimmed after.
 
 ### Test Infrastructure
 

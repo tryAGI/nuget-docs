@@ -103,29 +103,20 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
                 Console.WriteLine($"Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
                 Console.WriteLine();
 
-                var grouped = types.GroupBy(t => t.Kind).OrderBy(g => GetKindOrder(g.Key));
-
-                foreach (var group in grouped)
-                {
-                    var pluralKey = group.Key.EndsWith('s') ? $"{group.Key}es" : $"{group.Key}s";
-                    Console.WriteLine($"{pluralKey}:");
-
-                    foreach (var type in group)
+                CommonOptions.WriteGroupedByKind(
+                    types,
+                    kind: t => t.Kind,
+                    line: t =>
                     {
-                        var displayName = type.GenericParameterCount > 0
-                            ? $"{type.Name}<{new string(',', type.GenericParameterCount - 1)}>"
-                            : type.Name;
+                        var displayName = t.GenericParameterCount > 0
+                            ? $"{t.Name}<{new string(',', t.GenericParameterCount - 1)}>"
+                            : t.Name;
 
-                        var summary = xmlDocs?.GetTypeSummary(type.FullName);
-                        var line = summary is not null
-                            ? $"  {displayName} — {summary}"
-                            : $"  {displayName}";
-
-                        Console.WriteLine(line);
-                    }
-
-                    Console.WriteLine();
-                }
+                        var summary = xmlDocs?.GetTypeSummary(t.FullName);
+                        return summary is not null ? $"{displayName} — {summary}" : displayName;
+                    },
+                    write: Console.WriteLine,
+                    order: GetKindOrder);
 
                 CommonOptions.WriteTruncationFooter(total, limit, NarrowHint, leadingBlankLine: false);
             }

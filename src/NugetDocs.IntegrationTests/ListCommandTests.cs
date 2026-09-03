@@ -222,4 +222,18 @@ public class ListCommandTests
         // Subtract the header line.
         return csv.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length - 1;
     }
+
+    [TestMethod]
+    public async Task List_PluralizesKindHeadings()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("Interfaces:");
+        output.Should().Contain("Classes:");
+        output.Should().Contain("Structs:");
+        output.Should().Contain("Enums:");
+        output.Should().Contain("Delegates:");
+    }
 }

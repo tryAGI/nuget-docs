@@ -163,15 +163,11 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
         builder.Append("// Members: ").Append(members.Count).AppendLine();
         builder.AppendLine();
 
-        foreach (var group in members.GroupBy(m => m.Kind).OrderBy(g => g.Key, StringComparer.Ordinal))
-        {
-            builder.Append(group.Key).AppendLine("s:");
-            foreach (var member in group)
-            {
-                builder.Append("  ").Append(member.Signature).AppendLine(";");
-            }
-            builder.AppendLine();
-        }
+        CommonOptions.WriteGroupedByKind(
+            members,
+            kind: m => m.Kind,
+            line: m => $"{m.Signature};",
+            write: line => builder.AppendLine(line));
 
         return builder.ToString();
     }

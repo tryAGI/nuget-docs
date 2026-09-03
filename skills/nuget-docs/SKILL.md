@@ -121,6 +121,11 @@ not an answer: when you see that footer, **narrow with `--namespace` or a tighte
 than reaching for `--limit 0`. Uncapped, `list AWSSDK.EC2` is 5,572 lines (~908 KB); capped it is
 207 lines (~20 KB).
 
+`show --signatures` is also far cheaper in wall-clock terms, not just tokens: it reads the type
+system without decompiling, so AWSSDK.EC2's AmazonEC2Client surveys in ~0.11s against ~3.9s for the
+full decompile. Note the default cap does not save that time — the type is decompiled and then
+trimmed — so `--signatures` is the right first call on an unfamiliar large type.
+
 `show` caps at 1,000 lines by default and prints
 `// ... and N more lines (use --max-lines 0 for the full source, --signatures for an overview, or --member <name> for one member)`.
 The cap matters: `show AWSSDK.EC2 AmazonEC2Client` is 24,550 lines (~1.6 MB) uncapped and 1,004

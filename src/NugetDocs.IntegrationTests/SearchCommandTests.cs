@@ -61,14 +61,16 @@ public class SearchCommandTests
     [TestMethod]
     public async Task Search_AllIncludesInternalMembers()
     {
+        // --limit 0 so the default cap cannot clip either side, and count rows rather than
+        // characters: a capped larger result set can be shorter text than an uncapped smaller one.
         var (exitCode, outputPublic, _) = await CliTestHelper.RunAsync(
-            "search", "Newtonsoft.Json", "*Serialize*");
+            "search", "Newtonsoft.Json", "*Serialize*", "--limit", "0", "--format", "csv");
         var (exitCode2, outputAll, _) = await CliTestHelper.RunAsync(
-            "search", "Newtonsoft.Json", "*Serialize*", "--all");
+            "search", "Newtonsoft.Json", "*Serialize*", "--all", "--limit", "0", "--format", "csv");
 
         exitCode.Should().Be(0);
         exitCode2.Should().Be(0);
-        outputAll.Length.Should().BeGreaterThanOrEqualTo(outputPublic.Length);
+        CountRows(outputAll).Should().BeGreaterThanOrEqualTo(CountRows(outputPublic));
     }
 
     [TestMethod]

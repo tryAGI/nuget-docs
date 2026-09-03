@@ -218,4 +218,17 @@ public class ShowCommandTests
     {
         return text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
     }
+
+    [TestMethod]
+    public async Task Show_Signatures_PluralizesKindHeadings()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonConvert", "--signatures");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("Properties:");
+        output.Should().NotContain("Propertys:");
+        output.Should().Contain("Methods:");
+        output.Should().Contain("Fields:");
+    }
 }
