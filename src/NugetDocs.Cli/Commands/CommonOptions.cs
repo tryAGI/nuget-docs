@@ -101,6 +101,39 @@ internal static class CommonOptions
     }
 
     /// <summary>
+    /// Default maximum number of source lines emitted by <c>show</c> before truncation.
+    /// Leaves typical types whole (Newtonsoft.Json's JsonConvert decompiles to 972 lines) while
+    /// capping pathological ones (AWSSDK.EC2's AmazonEC2Client is 24,550 lines / 1.6 MB).
+    /// </summary>
+    public const int DefaultMaxLines = 1000;
+
+    public static Option<int> MaxLines => new(
+        name: "--max-lines")
+    {
+        Description = $"Maximum lines of source to print (default: {DefaultMaxLines}, 0 = all)",
+        DefaultValueFactory = _ => DefaultMaxLines,
+    };
+
+    /// <summary>
+    /// Trims source text to at most <paramref name="maxLines"/> lines. A limit of 0 or less means
+    /// "no limit". <paramref name="totalLines"/> receives the untrimmed line count.
+    /// </summary>
+    public static string ApplyLineLimit(string source, int maxLines, out int totalLines)
+    {
+        var lines = source.Split('\n');
+
+        // A trailing newline produces a final empty element that is not a real line.
+        totalLines = lines.Length > 0 && lines[^1].Length == 0 ? lines.Length - 1 : lines.Length;
+
+        if (maxLines <= 0 || totalLines <= maxLines)
+        {
+            return source;
+        }
+
+        return string.Join('\n', lines.Take(maxLines)) + '\n';
+    }
+
+    /// <summary>
     /// Escape a value for CSV output (RFC 4180).
     /// </summary>
     public static string CsvEscape(string value)

@@ -32,6 +32,12 @@ internal sealed class ShowCommand : Command
         Description = "Filter by namespace prefix (applies to --assembly attribute types)",
         DefaultValueFactory = _ => null,
     };
+    public Option<bool> SignaturesOption { get; } = new("--signatures", "-s")
+    {
+        Description = "Show member signatures only, without bodies (public/protected members)",
+        DefaultValueFactory = _ => false,
+    };
+    public Option<int> MaxLinesOption { get; } = CommonOptions.MaxLines;
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
     public Option<bool> JsonOption { get; } = CommonOptions.Json;
 
@@ -45,6 +51,8 @@ internal sealed class ShowCommand : Command
         Options.Add(MemberOption);
         Options.Add(AssemblyOption);
         Options.Add(NamespaceOption);
+        Options.Add(SignaturesOption);
+        Options.Add(MaxLinesOption);
         Options.Add(OutputOption);
         Options.Add(JsonOption);
 

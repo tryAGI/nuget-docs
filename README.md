@@ -56,10 +56,15 @@ Capped at 200 types by default so a huge package can't flood an agent's context 
 ```bash
 nuget-docs show Microsoft.Extensions.AI.Abstractions IChatClient
 nuget-docs show Newtonsoft.Json JsonConvert --member SerializeObject
+nuget-docs show Newtonsoft.Json JsonConvert --signatures  # member signatures, no bodies
+nuget-docs show AWSSDK.EC2 AmazonEC2Client --max-lines 0  # full source (default cap: 1000 lines)
 nuget-docs show Newtonsoft.Json --assembly  # assembly-level attributes
 ```
 
 Short names work — `IChatClient` resolves to `Microsoft.Extensions.AI.IChatClient`. Use `--member` to show a specific member (all overloads). Use `--assembly` to inspect assembly attributes.
+
+Capped at 1,000 lines by default — `show AWSSDK.EC2 AmazonEC2Client` is 24,550 lines (~1.6 MB)
+uncapped. `--signatures` (`-s`) gives a bodiless overview instead (JsonConvert: 78 lines vs 972).
 
 ### `search` — Search types and members
 
@@ -117,6 +122,7 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 ```bash
 nuget-docs deps Microsoft.Extensions.AI
 nuget-docs deps Microsoft.Extensions.AI --depth 3  # transitive
+nuget-docs deps Microsoft.Extensions.AI --limit 50 # cap nodes (default: 200, 0 = all)
 nuget-docs deps Microsoft.Extensions.AI --format table  # aligned columns
 nuget-docs deps Microsoft.Extensions.AI --format csv    # CSV output
 ```
@@ -147,7 +153,9 @@ nuget-docs versions Humanizer --format csv              # CSV output
 | `--framework <tfm>` | `-f` | Target framework (auto-detected by default) |
 | `--all` | `-a` | Include internal/private members |
 | `--namespace <prefix>` | `-n` | Filter by namespace prefix |
-| `--limit <n>` | `-l` | Maximum rows for `list`/`search` (default: 200, `0` = all) and `versions` (default: 20, `0` = all) |
+| `--limit <n>` | `-l` | Maximum rows for `list`/`search`/`deps` (default: 200, `0` = all) and `versions` (default: 20, `0` = all) |
+| `--max-lines <n>` | | Maximum source lines for `show` (default: 1000, `0` = all) |
+| `--signatures` | `-s` | `show` only: member signatures without bodies |
 | `--format <fmt>` | | Output format for `list`/`search`/`versions`/`deps`/`diff`: `grouped` (default), `table`, `csv` |
 | `--deprecated` | | Show deprecation/vulnerability info (for `versions`) |
 | `--json` | `-j` | JSON output (shorthand for `--output json`) |
@@ -166,7 +174,8 @@ nuget-docs versions Humanizer --format csv              # CSV output
 - Deprecation and vulnerability detection from NuGet registry
 - Version listing with stable/latest filters
 - Framework-aware: picks best matching TFM (net10.0 > net9.0 > ... > netstandard2.0)
-- Context-budgeted output — `list`/`search` cap at 200 rows with a `... and N more` footer; JSON carries `total`/`truncated`
+- Context-budgeted output — `list`/`search`/`deps` cap at 200 rows, `show` at 1,000 lines, each with a `... and N more` footer; JSON carries `total`/`truncated`
+- Signature-only view (`show --signatures`) for surveying large types without decompiling bodies
 - AI-optimized plain text output
 - JSON output on all commands
 - Tab completion via `dotnet-suggest`

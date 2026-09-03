@@ -17,6 +17,8 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
         var memberName = parseResult.GetValue(command.MemberOption);
         var showAssembly = parseResult.GetValue(command.AssemblyOption);
         var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
+        var signaturesOnly = parseResult.GetValue(command.SignaturesOption);
+        var maxLines = parseResult.GetValue(command.MaxLinesOption);
         var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
         try
@@ -63,20 +65,48 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
                 return 1;
             }
 
-            var source = inspector.DecompileType(typeName, publicOnly: !showAll);
+            string source;
 
-            // If --member is specified, extract just that member
-            if (memberName is not null)
+            if (signaturesOnly)
             {
-                var memberSource = TypeInspector.ExtractMember(source, memberName);
-                if (memberSource is null)
+                // Signature overview: no bodies, so a huge type stays a handful of lines.
+                var members = inspector.GetMemberSignatures(typeName);
+
+                if (memberName is not null)
                 {
-                    Console.Error.WriteLine($"Error: Member '{memberName}' not found in type.");
-                    return 1;
+                    members = members
+                        .Where(m => string.Equals(m.Name, memberName, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    if (members.Count == 0)
+                    {
+                        Console.Error.WriteLine($"Error: Member '{memberName}' not found in type.");
+                        return 1;
+                    }
                 }
 
-                source = memberSource;
+                source = FormatSignatures(inspector.ResolveTypeName(typeName), members);
             }
+            else
+            {
+                source = inspector.DecompileType(typeName, publicOnly: !showAll);
+
+                // If --member is specified, extract just that member
+                if (memberName is not null)
+                {
+                    var memberSource = TypeInspector.ExtractMember(source, memberName);
+                    if (memberSource is null)
+                    {
+                        Console.Error.WriteLine($"Error: Member '{memberName}' not found in type.");
+                        return 1;
+                    }
+
+                    source = memberSource;
+                }
+            }
+
+            source = CommonOptions.ApplyLineLimit(source, maxLines, out var totalLines);
+            var truncated = maxLines > 0 && totalLines > maxLines;
 
             if (jsonOutput)
             {
@@ -88,6 +118,9 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
                     framework = resolved.Framework,
                     typeName = resolvedName,
                     member = memberName,
+                    signaturesOnly,
+                    totalLines,
+                    truncated,
                     source,
                 };
                 Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
@@ -97,6 +130,16 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
                 Console.WriteLine($"// Package: {resolved.PackageId} {resolved.Version} ({resolved.Framework})");
                 Console.WriteLine();
                 Console.Write(source);
+
+                if (truncated)
+                {
+                    // Comment syntax: the output is C#, and a truncated type no longer parses.
+                    var hint = signaturesOnly
+                        ? "use --max-lines 0 for all members, or --member <name> for one"
+                        : "use --max-lines 0 for the full source, --signatures for an overview, or --member <name> for one member";
+                    Console.WriteLine();
+                    Console.WriteLine($"// ... and {totalLines - maxLines} more lines ({hint})");
+                }
             }
 
             return 0;
@@ -106,5 +149,30 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
             Console.Error.WriteLine($"Error: {ex.Message}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Renders member signatures grouped by kind, mirroring the layout <c>list</c> uses for types.
+    /// </summary>
+    private static string FormatSignatures(
+        string typeName,
+        IReadOnlyList<TypeInspector.MemberSignature> members)
+    {
+        var builder = new System.Text.StringBuilder();
+        builder.Append("// Type: ").Append(typeName).AppendLine();
+        builder.Append("// Members: ").Append(members.Count).AppendLine();
+        builder.AppendLine();
+
+        foreach (var group in members.GroupBy(m => m.Kind).OrderBy(g => g.Key, StringComparer.Ordinal))
+        {
+            builder.Append(group.Key).AppendLine("s:");
+            foreach (var member in group)
+            {
+                builder.Append("  ").Append(member.Signature).AppendLine(";");
+            }
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
     }
 }

@@ -111,4 +111,75 @@ public class DepsCommandTests
         exitCode.Should().Be(0);
         output.Should().Contain("Newtonsoft.Json");
     }
+
+    [TestMethod]
+    public async Task Deps_ExplicitLimit_IsHonored()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--depth", "3", "--limit", "5", "--format", "csv");
+
+        exitCode.Should().Be(0);
+        CountRows(output).Should().Be(5);
+    }
+
+    [TestMethod]
+    public async Task Deps_TruncationFooter_SuggestsLowerDepth()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--depth", "3", "--limit", "5");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("... and ");
+        output.Should().Contain("a lower --depth to narrow");
+    }
+
+    [TestMethod]
+    public async Task Deps_LimitZero_ShowsAll()
+    {
+        var (exitCode, limited, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--depth", "3", "--limit", "5", "--format", "csv");
+        var (exitCode2, all, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--depth", "3", "--limit", "0", "--format", "csv");
+
+        exitCode.Should().Be(0);
+        exitCode2.Should().Be(0);
+        // CSV stays machine-parseable — the footer is a text/table-format affordance only.
+        limited.Should().NotContain("... and ");
+        all.Should().NotContain("... and ");
+        CountRows(all).Should().BeGreaterThan(CountRows(limited));
+    }
+
+    [TestMethod]
+    public async Task Deps_NoTruncationFooter_WhenUnderLimit()
+    {
+        // Direct dependencies only — nowhere near the 200 default.
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI");
+
+        exitCode.Should().Be(0);
+        output.Should().NotContain("... and ");
+    }
+
+    [TestMethod]
+    public async Task Deps_JsonReportsTotalAndTruncated()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--depth", "3", "--limit", "5", "--json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"Total\"");
+        output.Should().Contain("\"Truncated\": true");
+
+        var (exitCode2, full, _) = await CliTestHelper.RunAsync(
+            "deps", "Microsoft.Extensions.AI", "--depth", "3", "--limit", "0", "--json");
+
+        exitCode2.Should().Be(0);
+        full.Should().Contain("\"Truncated\": false");
+    }
+
+    private static int CountRows(string csv)
+    {
+        // Subtract the header line.
+        return csv.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length - 1;
+    }
 }

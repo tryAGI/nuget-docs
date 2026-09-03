@@ -45,10 +45,12 @@ Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Del
 ### Show a specific type
 
 ```bash
-nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--assembly] [--namespace <prefix>] [--json] [--output json]
+nuget-docs show <Package> <TypeName> [--version <ver>] [--framework <tfm>] [--all] [--member <name>] [--signatures] [--max-lines <n>] [--assembly] [--namespace <prefix>] [--json] [--output json]
 ```
 
 Decompiles the full type to C# source with `///` XML documentation comments. **Short names work** — `IChatClient` automatically resolves to `Microsoft.Extensions.AI.IChatClient`. By default shows only public/protected members; use `--all` (`-a`) to include private and internal members. Use `--member` (`-m`) to show only a specific member. Use `--assembly` to show assembly-level attributes instead of a type. Use `--namespace` (`-n`) with `--assembly` to filter attributes by their type's namespace prefix.
+
+**Capped at 1,000 lines by default** — `--max-lines <n>` changes it, `--max-lines 0` prints everything. Use `--signatures` (`-s`) for a bodiless overview of the type's public/protected members; combine it with `--member` to filter to one member's overloads.
 
 ### Search types and members
 
@@ -77,10 +79,10 @@ Shows package ID, version, authors, description, license, frameworks, and depend
 ### Dependency tree
 
 ```bash
-nuget-docs deps <Package> [--version <ver>] [--framework <tfm>] [--depth <n>] [--format table|csv] [--json] [--output json]
+nuget-docs deps <Package> [--version <ver>] [--framework <tfm>] [--depth <n>] [--limit <n>] [--format table|csv] [--json] [--output json]
 ```
 
-Shows the dependency tree of a package with tree-style output. Use `--depth` (`-d`) to control transitive resolution depth (default: 1 = direct only). Use `--depth 2` or higher for transitive dependencies. Shared dependencies are marked with `(already listed)` to avoid confusion. Use `--format table` for aligned columns or `--format csv` for CSV output.
+Shows the dependency tree of a package with tree-style output. Use `--depth` (`-d`) to control transitive resolution depth (default: 1 = direct only). Use `--depth 2` or higher for transitive dependencies. Shared dependencies are marked with `(already listed)` to avoid confusion. Use `--format table` for aligned columns or `--format csv` for CSV output. **Capped at 200 nodes by default** — a deep `--depth` fans out fast, so when the footer appears prefer lowering `--depth` over raising `--limit`.
 
 ### List available versions
 
@@ -103,6 +105,7 @@ nothing here summarizes for you — so pick the narrowest command that answers t
 | `list <pkg> --namespace Newtonsoft.Json.Linq` | 35 | Namespace-scoped listing |
 | `show <pkg> JsonConvert --member SerializeObject` | 149 | One member, all overloads |
 | `list <pkg>` | 156 | Names + one-line summaries, no bodies |
+| `show <pkg> JsonConvert --signatures` | 78 | Bodiless member overview (67 members) |
 | `show <pkg> JsonConvert` | 972 | Full decompiled type — the expensive call |
 
 **The funnel** — do not start at `show` on an unfamiliar package:
@@ -118,8 +121,15 @@ not an answer: when you see that footer, **narrow with `--namespace` or a tighte
 than reaching for `--limit 0`. Uncapped, `list AWSSDK.EC2` is 5,572 lines (~908 KB); capped it is
 207 lines (~20 KB).
 
-`show` is not capped — it decompiles exactly one type, and a very large type (e.g. an AWS service
-client) can still be thousands of lines. Prefer `--member` when you know what you are after.
+`show` caps at 1,000 lines by default and prints
+`// ... and N more lines (use --max-lines 0 for the full source, --signatures for an overview, or --member <name> for one member)`.
+The cap matters: `show AWSSDK.EC2 AmazonEC2Client` is 24,550 lines (~1.6 MB) uncapped and 1,004
+lines (~56 KB) capped. When you hit it, reach for `--signatures` or `--member` rather than
+`--max-lines 0` — a truncated type no longer parses as C# anyway.
+
+`deps` caps at 200 nodes. Depth is the real cost driver (Microsoft.Extensions.AI is 8 nodes at
+`--depth 1` and 39 at `--depth 3`; EF Core SqlServer reaches 135 at `--depth 4`), so answer a
+truncation footer by lowering `--depth`, not by raising `--limit`.
 
 For `diff`, `--type-only` skips decompilation entirely and is the cheapest way to see what moved
 between versions; add `--breaking` or `--no-additive` to cut it further.
@@ -157,7 +167,9 @@ between versions; add `--breaking` or `--no-additive` to cut it further.
 - **JSON output**: Use `--json` (`-j`) or `--output json` (`-o json`) on any command for structured JSON output
 - **Output is AI-friendly**: Plain text with `///` XML doc comments — compact and informative
 - **For large packages**: Use `search` before `show` to narrow down. `list`/`search` truncate at 200 rows by default — when you see the `... and N more` footer, narrow with `--namespace` or a tighter pattern instead of `--limit 0`
-- **Result limit**: `--limit <n>` (`-l`) sets the cap on `list`/`search` (default 200, `0` = unlimited). JSON output carries `total` and `truncated` so you can tell when rows were hidden; CSV output is trimmed but never gets a footer, so it stays parseable
+- **Result limit**: `--limit <n>` (`-l`) sets the cap on `list`/`search`/`deps` (default 200, `0` = unlimited). JSON output carries `total` and `truncated` (`Total`/`Truncated` for `deps`) so you can tell when rows were hidden; CSV output is trimmed but never gets a footer, so it stays parseable
+- **Source limit**: `show` caps at 1,000 lines (`--max-lines <n>`, `0` = unlimited) and reports `totalLines`/`truncated` in JSON
+- **Signature overview**: `show <pkg> <Type> --signatures` (`-s`) lists public/protected member signatures without bodies — the cheap way to survey a large type before deciding what to read in full
 - **Version pinning**: Use `--version` to inspect a specific version. Supports `latest`, `latest-stable`, and `latest-prerelease` keywords on any command
 
 ## Examples

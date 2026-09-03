@@ -12,6 +12,7 @@ internal sealed class DepsCommand : Command
         Description = "Maximum depth for transitive dependency resolution (default: 1 = direct only)",
         DefaultValueFactory = _ => 1,
     };
+    public Option<int> LimitOption { get; } = CommonOptions.Limit;
     public Option<string?> FormatOption { get; } = CommonOptions.Format;
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
     public Option<bool> JsonOption { get; } = CommonOptions.Json;
@@ -22,6 +23,7 @@ internal sealed class DepsCommand : Command
         Options.Add(VersionOption);
         Options.Add(FrameworkOption);
         Options.Add(DepthOption);
+        Options.Add(LimitOption);
         Options.Add(FormatOption);
         Options.Add(OutputOption);
         Options.Add(JsonOption);

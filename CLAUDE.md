@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build everything
 dotnet build nuget-docs.slnx
 
-# Run integration tests (108 tests, hits NuGet.org)
+# Run integration tests (121 tests, hits NuGet.org)
 dotnet test src/NugetDocs.IntegrationTests/
 
 # Run a single test
@@ -60,12 +60,15 @@ All commands support `--json` / `--output json`. Commands with tabular data (`li
 
 ### Result Limits
 
-`list` and `search` truncate at `CommonOptions.DefaultResultLimit` (200) rows; `versions` at 20. `--limit 0` disables the cap. The shared helpers live in `CommonOptions`: `ApplyLimit` trims the collection, `WriteTruncationFooter` writes the `... and N more (use --limit 0 to show all, or <hint>)` line.
+`list`, `search` and `deps` truncate at `CommonOptions.DefaultResultLimit` (200) rows; `versions` at 20; `show` at `CommonOptions.DefaultMaxLines` (1000) source lines via `--max-lines`. `--limit 0` / `--max-lines 0` disables the cap. The shared helpers live in `CommonOptions`: `ApplyLimit` trims a collection, `ApplyLineLimit` trims source text and reports the untrimmed line count, `WriteTruncationFooter` writes the `... and N more (use --limit 0 to show all, or <hint>)` line.
+
+`deps` cannot use `ApplyLimit` — it trims a tree, so `DepsCommandAction.TrimTree` walks depth-first with a shared budget so the printed prefix matches an untrimmed run, and `CountNodes` supplies the pre-limit total. `show` writes its footer as a `//` comment because the output is C# and a truncated type no longer parses.
 
 Rules when adding a limit to a new command:
 - Capture `total` **before** trimming — text/table headers and the JSON `total`/`truncated` fields report the pre-limit figure.
 - Apply the limit to every output mode, JSON and CSV included, so consumers never see a different row count than the text mode.
 - Never write the footer in CSV mode — CSV must stay machine-parseable.
+- Any test that compares "more content" by output **character length** breaks once a cap applies — internal members carry no XML docs, so a capped larger listing can be shorter text. Compare row counts, or pass `--limit 0` / `--max-lines 0` on both sides.
 
 ### Test Infrastructure
 

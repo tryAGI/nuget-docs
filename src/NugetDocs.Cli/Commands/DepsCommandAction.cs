@@ -14,6 +14,7 @@ internal sealed class DepsCommandAction(DepsCommand command) : AsynchronousComma
         var version = parseResult.GetValue(command.VersionOption);
         var framework = parseResult.GetValue(command.FrameworkOption);
         var maxDepth = parseResult.GetValue(command.DepthOption);
+        var limit = parseResult.GetValue(command.LimitOption);
         var format = parseResult.GetValue(command.FormatOption);
         var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
 
@@ -22,12 +23,32 @@ internal sealed class DepsCommandAction(DepsCommand command) : AsynchronousComma
             var resolved = await PackageResolver.ResolveMetadataOnlyAsync(
                 package, version, cancellationToken).ConfigureAwait(false);
 
-            var tree = await BuildDependencyTreeAsync(
+            var fullTree = await BuildDependencyTreeAsync(
                 package, resolved.Version, framework, maxDepth, cancellationToken).ConfigureAwait(false);
+
+            // A wide --depth can fan out without bound (EF Core SqlServer reaches 135 nodes at
+            // depth 4), so cap the node count the same way list/search cap rows.
+            var total = CountNodes(fullTree.Dependencies);
+            var remaining = limit > 0 ? limit : int.MaxValue;
+            var tree = limit > 0 && total > limit
+                ? fullTree with { Dependencies = TrimTree(fullTree.Dependencies, ref remaining) }
+                : fullTree;
+            const string NarrowHint = "a lower --depth to narrow";
 
             if (jsonOutput)
             {
-                Console.WriteLine(JsonSerializer.Serialize(tree, JsonOptions.Indented));
+                // Keeps the existing PascalCase DepNode shape, with the pre-limit count alongside.
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new
+                    {
+                        tree.Id,
+                        tree.Version,
+                        tree.Dependencies,
+                        tree.Deduplicated,
+                        Total = total,
+                        Truncated = limit > 0 && total > limit,
+                    },
+                    JsonOptions.Indented));
             }
             else if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
             {
@@ -67,6 +88,8 @@ internal sealed class DepsCommandAction(DepsCommand command) : AsynchronousComma
                         var note = row.Deduplicated ? "(already listed)" : "";
                         Console.WriteLine($"  {row.Depth.ToString(System.Globalization.CultureInfo.InvariantCulture).PadRight(colDepth)}  {row.Id.PadRight(colId)}  {row.Version.PadRight(colVer)}  {note}");
                     }
+
+                    CommonOptions.WriteTruncationFooter(total, limit, NarrowHint);
                 }
             }
             else
@@ -81,6 +104,8 @@ internal sealed class DepsCommandAction(DepsCommand command) : AsynchronousComma
                 else
                 {
                     PrintTree(tree.Dependencies, "", true);
+
+                    CommonOptions.WriteTruncationFooter(total, limit, NarrowHint);
                 }
             }
 
@@ -230,6 +255,42 @@ internal sealed class DepsCommandAction(DepsCommand command) : AsynchronousComma
         }
 
         return parts.Length > 1 ? parts[1].Trim() : versionRange;
+    }
+
+    /// <summary>
+    /// Total node count of a dependency tree, matching what the flat and tree renderers emit.
+    /// </summary>
+    private static int CountNodes(List<DepNode> nodes)
+    {
+        var count = 0;
+        FlattenTree(nodes, 0, (_, _) => count++);
+        return count;
+    }
+
+    /// <summary>
+    /// Trims a tree to the first <paramref name="remaining"/> nodes in the same depth-first order
+    /// the renderers walk, so the printed prefix matches an untrimmed run.
+    /// </summary>
+    private static List<DepNode> TrimTree(List<DepNode> nodes, ref int remaining)
+    {
+        var trimmed = new List<DepNode>();
+
+        foreach (var node in nodes)
+        {
+            if (remaining <= 0)
+            {
+                break;
+            }
+
+            remaining--;
+            var children = node.Dependencies.Count > 0
+                ? TrimTree(node.Dependencies, ref remaining)
+                : node.Dependencies;
+
+            trimmed.Add(node with { Dependencies = children });
+        }
+
+        return trimmed;
     }
 
     private static void FlattenTree(List<DepNode> nodes, int depth, Action<DepNode, int> action)
