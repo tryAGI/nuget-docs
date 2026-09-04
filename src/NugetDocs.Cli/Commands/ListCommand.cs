@@ -17,6 +17,11 @@ internal sealed class ListCommand : Command
         Description = "Filter types by namespace prefix",
         DefaultValueFactory = _ => null,
     };
+    public Option<bool> DeprecatedOption { get; } = new("--deprecated")
+    {
+        Description = "Show only deprecated ([Obsolete]) types",
+        DefaultValueFactory = _ => false,
+    };
     public Option<int> LimitOption { get; } = CommonOptions.Limit;
     public Option<string?> FormatOption { get; } = CommonOptions.Format;
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
@@ -29,6 +34,7 @@ internal sealed class ListCommand : Command
         Options.Add(FrameworkOption);
         Options.Add(AllOption);
         Options.Add(NamespaceOption);
+        Options.Add(DeprecatedOption);
         Options.Add(LimitOption);
         Options.Add(FormatOption);
         Options.Add(OutputOption);

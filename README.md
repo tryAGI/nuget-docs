@@ -43,6 +43,7 @@ nuget-docs list Microsoft.Extensions.AI.Abstractions
 nuget-docs list Newtonsoft.Json --namespace Newtonsoft.Json.Linq
 nuget-docs list Humanizer --all          # include internal types
 nuget-docs list AWSSDK.EC2 --limit 50    # cap the listing (default: 200, 0 = all)
+nuget-docs list Newtonsoft.Json --deprecated    # only [Obsolete] types
 nuget-docs list Newtonsoft.Json --format table  # aligned columns
 nuget-docs list Newtonsoft.Json --format csv    # CSV output
 ```
@@ -74,6 +75,7 @@ nuget-docs search Newtonsoft.Json "*Token*" --namespace Newtonsoft.Json.Linq
 nuget-docs search Newtonsoft.Json "*Token*" --format table  # aligned columns
 nuget-docs search Newtonsoft.Json "*Convert*" --format csv  # CSV output
 nuget-docs search AWSSDK.EC2 "*SecurityGroup*" --limit 50   # cap results (default: 200, 0 = all)
+nuget-docs search Newtonsoft.Json "*Binder*" --deprecated   # only [Obsolete] matches
 ```
 
 Uses glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. Capped at 200
@@ -156,6 +158,7 @@ nuget-docs versions Humanizer --format csv              # CSV output
 | `--limit <n>` | `-l` | Maximum rows for `list`/`search`/`deps` (default: 200, `0` = all) and `versions` (default: 20, `0` = all) |
 | `--max-lines <n>` | | Maximum source lines for `show` (default: 1000, `0` = all) |
 | `--signatures` | `-s` | `show` only: member signatures without bodies |
+| `--deprecated` | | `list`/`search`: only `[Obsolete]` API. On `versions`: registry deprecation info |
 | `--format <fmt>` | | Output format for `list`/`search`/`versions`/`deps`/`diff`: `grouped` (default), `table`, `csv` |
 | `--deprecated` | | Show deprecation/vulnerability info (for `versions`) |
 | `--json` | `-j` | JSON output (shorthand for `--output json`) |
@@ -176,6 +179,7 @@ nuget-docs versions Humanizer --format csv              # CSV output
 - Framework-aware: picks best matching TFM (net10.0 > net9.0 > ... > netstandard2.0)
 - Context-budgeted output — `list`/`search`/`deps` cap at 200 rows, `show` at 1,000 lines, each with a `... and N more` footer; JSON carries `total`/`truncated`
 - Signature-only view (`show --signatures`) for surveying large types without decompiling bodies
+- Deprecation discovery — `[Obsolete]` types and members are marked and filterable, and `diff --member-diff` reports what *became* obsolete between versions
 - AI-optimized plain text output
 - JSON output on all commands
 - Tab completion via `dotnet-suggest`

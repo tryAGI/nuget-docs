@@ -59,7 +59,8 @@ internal sealed partial class TypeInspector : IDisposable
                 Kind: GetTypeKind(type),
                 Accessibility: type.Accessibility.ToString(),
                 GenericParameterCount: type.TypeParameterCount,
-                ReflectionName: type.FullTypeName.ReflectionName));
+                ReflectionName: type.FullTypeName.ReflectionName,
+                ObsoleteMessage: GetObsoleteMessage(type)));
         }
 
         return types.OrderBy(t => t.Namespace).ThenBy(t => t.Name).ToList();
@@ -320,7 +321,8 @@ internal sealed partial class TypeInspector : IDisposable
                     Kind: GetTypeKind(type),
                     FullName: type.FullName,
                     Name: type.Name,
-                    MemberKind: null));
+                    MemberKind: null,
+                    ObsoleteMessage: GetObsoleteMessage(type)));
             }
 
             // Search members
@@ -338,7 +340,9 @@ internal sealed partial class TypeInspector : IDisposable
                         Kind: GetTypeKind(type),
                         FullName: $"{type.FullName}.{member.Name}",
                         Name: member.Name,
-                        MemberKind: GetMemberKind(member)));
+                        MemberKind: GetMemberKind(member),
+                        // A member inherits the type's deprecation when it has none of its own.
+                        ObsoleteMessage: GetObsoleteMessage(member) ?? GetObsoleteMessage(type)));
                 }
             }
         }
@@ -830,6 +834,26 @@ internal sealed partial class TypeInspector : IDisposable
         return "Class";
     }
 
+    /// <summary>
+    /// Reads <c>[Obsolete]</c> off an entity. Returns null when the entity is not marked obsolete,
+    /// otherwise the deprecation message — or an empty string when the attribute carries none.
+    /// </summary>
+    private static string? GetObsoleteMessage(IEntity entity)
+    {
+        var attribute = entity.GetAttributes()
+            .FirstOrDefault(a => string.Equals(
+                a.AttributeType.FullName, "System.ObsoleteAttribute", StringComparison.Ordinal));
+
+        if (attribute is null)
+        {
+            return null;
+        }
+
+        return attribute.FixedArguments.Length > 0
+            ? attribute.FixedArguments[0].Value as string ?? ""
+            : "";
+    }
+
     private static string? GetMemberKind(IMember member)
     {
         return member switch
@@ -866,13 +890,27 @@ internal sealed partial class TypeInspector : IDisposable
         string Kind,
         string Accessibility,
         int GenericParameterCount,
-        string ReflectionName);
+        string ReflectionName,
+        string? ObsoleteMessage = null);
 
     internal sealed record SearchResult(
         string Kind,
         string FullName,
         string Name,
-        string? MemberKind);
+        string? MemberKind,
+        string? ObsoleteMessage = null);
+
+    /// <summary>
+    /// The type's own <c>[Obsolete]</c> message, or null when the type is not deprecated.
+    /// </summary>
+    public string? GetTypeObsoleteMessage(string typeName)
+    {
+        var ftName = new FullTypeName(ResolveTypeName(typeName));
+        var type = _decompiler.TypeSystem.MainModule.TypeDefinitions
+            .FirstOrDefault(t => t.FullTypeName == ftName);
+
+        return type is null ? null : GetObsoleteMessage(type);
+    }
 
     /// <summary>
     /// Get public member signatures for a type, for member-level diffing.
@@ -905,7 +943,8 @@ internal sealed partial class TypeInspector : IDisposable
             members.Add(new MemberSignature(
                 Name: member.Name,
                 Kind: kind,
-                Signature: signature));
+                Signature: signature,
+                ObsoleteMessage: GetObsoleteMessage(member)));
         }
 
         return members.OrderBy(m => m.Kind).ThenBy(m => m.Name).ToList();
@@ -1019,5 +1058,6 @@ internal sealed partial class TypeInspector : IDisposable
     internal sealed record MemberSignature(
         string Name,
         string Kind,
-        string Signature);
+        string Signature,
+        string? ObsoleteMessage = null);
 }

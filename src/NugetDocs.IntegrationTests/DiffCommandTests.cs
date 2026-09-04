@@ -159,4 +159,51 @@ public class DiffCommandTests
         exitCode.Should().BeOneOf(0, 2);
         output.Should().Contain("Humanizer.Core");
     }
+
+    [TestMethod]
+    public async Task Diff_DetectsNewlyDeprecatedTypes()
+    {
+        // Newtonsoft.Json 10.0.x moved BSON to its own package and marked the types [Obsolete].
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "9.0.1", "--to", "10.0.3", "--member-diff");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("** now deprecated");
+        output.Should().Contain("BsonReader");
+        output.Should().Contain("! type is now deprecated");
+    }
+
+    [TestMethod]
+    public async Task Diff_DetectsNewlyDeprecatedMembers()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "9.0.1", "--to", "10.0.3", "--member-diff");
+
+        exitCode.Should().BeOneOf(0, 2);
+        // Signature is unchanged — only the [Obsolete] attribute appeared.
+        output.Should().Contain("// now deprecated: Binder is obsolete");
+    }
+
+    [TestMethod]
+    public async Task Diff_NoAdditive_KeepsDeprecations()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "9.0.1", "--to", "10.0.3",
+            "--member-diff", "--no-additive");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("now deprecated");
+    }
+
+    [TestMethod]
+    public async Task Diff_JsonReportsNewlyDeprecated()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "9.0.1", "--to", "10.0.3",
+            "--member-diff", "--json");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("\"newlyDeprecated\"");
+        output.Should().Contain("\"deprecatedMembers\"");
+    }
 }

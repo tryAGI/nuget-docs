@@ -236,4 +236,48 @@ public class ListCommandTests
         output.Should().Contain("Enums:");
         output.Should().Contain("Delegates:");
     }
+
+    [TestMethod]
+    public async Task List_MarksDeprecatedTypes()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("** deprecated");
+    }
+
+    [TestMethod]
+    public async Task List_Deprecated_FiltersToObsoleteTypes()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json", "--deprecated");
+
+        exitCode.Should().Be(0);
+        // JsonSchema and the Bson types carry [Obsolete]; JsonConvert does not.
+        output.Should().Contain("JsonValidatingReader");
+        output.Should().NotContain("JsonConvert");
+    }
+
+    [TestMethod]
+    public async Task List_CsvCarriesDeprecationColumn()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json", "--deprecated", "--format", "csv");
+
+        exitCode.Should().Be(0);
+        output.Should().StartWith("Kind,Name,FullName,Namespace,Summary,Deprecated");
+        output.Should().Contain("moved to its own package");
+    }
+
+    [TestMethod]
+    public async Task List_JsonCarriesDeprecation()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json", "--deprecated", "--json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"deprecated\": true");
+        output.Should().Contain("\"deprecationMessage\"");
+    }
 }

@@ -21,6 +21,11 @@ internal sealed class SearchCommand : Command
         Description = "Filter results by namespace prefix",
         DefaultValueFactory = _ => null,
     };
+    public Option<bool> DeprecatedOption { get; } = new("--deprecated")
+    {
+        Description = "Show only deprecated ([Obsolete]) results",
+        DefaultValueFactory = _ => false,
+    };
     public Option<int> LimitOption { get; } = CommonOptions.Limit;
     public Option<string?> FormatOption { get; } = CommonOptions.Format;
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
@@ -34,6 +39,7 @@ internal sealed class SearchCommand : Command
         Options.Add(FrameworkOption);
         Options.Add(AllOption);
         Options.Add(NamespaceOption);
+        Options.Add(DeprecatedOption);
         Options.Add(LimitOption);
         Options.Add(FormatOption);
         Options.Add(OutputOption);

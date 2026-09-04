@@ -189,4 +189,28 @@ public class SearchCommandTests
         // Subtract the header line.
         return csv.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length - 1;
     }
+
+    [TestMethod]
+    public async Task Search_Deprecated_FiltersToObsoleteResults()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Binder*", "--deprecated");
+
+        exitCode.Should().Be(0);
+        // JsonSerializerSettings.Binder is [Obsolete]; ISerializationBinder is not.
+        output.Should().Contain("** deprecated");
+        output.Should().Contain("JsonSerializerSettings.Binder");
+        output.Should().NotContain("ISerializationBinder");
+    }
+
+    [TestMethod]
+    public async Task Search_JsonCarriesDeprecation()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Binder*", "--deprecated", "--json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"deprecated\": true");
+        output.Should().Contain("\"deprecationMessage\"");
+    }
 }

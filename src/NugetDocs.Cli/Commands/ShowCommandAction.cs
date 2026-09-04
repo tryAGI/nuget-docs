@@ -85,7 +85,10 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
                     }
                 }
 
-                source = FormatSignatures(inspector.ResolveTypeName(typeName), members);
+                source = FormatSignatures(
+                    inspector.ResolveTypeName(typeName),
+                    members,
+                    inspector.GetTypeObsoleteMessage(typeName));
             }
             else
             {
@@ -156,17 +159,34 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
     /// </summary>
     private static string FormatSignatures(
         string typeName,
-        IReadOnlyList<TypeInspector.MemberSignature> members)
+        IReadOnlyList<TypeInspector.MemberSignature> members,
+        string? typeObsoleteMessage)
     {
         var builder = new System.Text.StringBuilder();
         builder.Append("// Type: ").Append(typeName).AppendLine();
+
+        // A type-level [Obsolete] does not repeat on its members, so surface it in the header.
+        if (typeObsoleteMessage is not null)
+        {
+            builder.Append("// ** deprecated");
+            if (typeObsoleteMessage.Length > 0)
+            {
+                builder.Append(": ").Append(typeObsoleteMessage);
+            }
+            builder.AppendLine();
+        }
+
         builder.Append("// Members: ").Append(members.Count).AppendLine();
         builder.AppendLine();
 
         CommonOptions.WriteGroupedByKind(
             members,
             kind: m => m.Kind,
-            line: m => $"{m.Signature};",
+            // The deprecation marker is the highest-value signal in a survey, so it rides inline
+            // rather than being dropped with the rest of the attributes.
+            line: m => m.ObsoleteMessage is null
+                ? $"{m.Signature};"
+                : $"{m.Signature};  // ** deprecated{(m.ObsoleteMessage.Length > 0 ? $": {m.ObsoleteMessage}" : "")}",
             write: line => builder.AppendLine(line));
 
         return builder.ToString();

@@ -15,6 +15,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
         var framework = parseResult.GetValue(command.FrameworkOption);
         var showAll = parseResult.GetValue(command.AllOption);
         var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
+        var deprecatedOnly = parseResult.GetValue(command.DeprecatedOption);
         var limit = parseResult.GetValue(command.LimitOption);
         var format = parseResult.GetValue(command.FormatOption);
         var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
@@ -30,6 +31,11 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
             var filtered = namespaceFilter is not null
                 ? allResults.Where(r => r.FullName.StartsWith(namespaceFilter, StringComparison.OrdinalIgnoreCase)).ToList()
                 : allResults;
+
+            if (deprecatedOnly)
+            {
+                filtered = filtered.Where(r => r.ObsoleteMessage is not null).ToList();
+            }
 
             var total = filtered.Count;
             var results = CommonOptions.ApplyLimit(filtered, limit);
@@ -57,16 +63,18 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                         memberKind = r.MemberKind,
                         name = r.Name,
                         fullName = r.FullName,
+                        deprecated = r.ObsoleteMessage is not null,
+                        deprecationMessage = r.ObsoleteMessage,
                     }),
                 };
                 Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
             }
             else if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("Kind,MemberKind,Name,FullName");
+                Console.WriteLine("Kind,MemberKind,Name,FullName,Deprecated");
                 foreach (var result in results)
                 {
-                    Console.WriteLine($"{result.Kind},{result.MemberKind ?? ""},{CommonOptions.CsvEscape(result.Name)},{CommonOptions.CsvEscape(result.FullName)}");
+                    Console.WriteLine($"{result.Kind},{result.MemberKind ?? ""},{CommonOptions.CsvEscape(result.Name)},{CommonOptions.CsvEscape(result.FullName)},{CommonOptions.CsvEscape(result.ObsoleteMessage ?? "")}");
                 }
             }
             else if (string.Equals(format, "table", StringComparison.OrdinalIgnoreCase))
@@ -80,7 +88,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                 {
                     Kind = r.MemberKind is not null ? $"{r.Kind}.{r.MemberKind}" : r.Kind,
                     Name = r.Name,
-                    FullName = r.FullName,
+                    FullName = r.ObsoleteMessage is not null ? $"{r.FullName} ** deprecated" : r.FullName,
                 }).ToList();
 
                 var colKind = Math.Max("Kind".Length, rows.Count > 0 ? rows.Max(r => r.Kind.Length) : 0);
@@ -109,7 +117,8 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                         ? $"{result.Kind}.{result.MemberKind}"
                         : result.Kind;
 
-                    Console.WriteLine($"  [{kindLabel}] {result.FullName}");
+                    var marker = result.ObsoleteMessage is not null ? " ** deprecated" : "";
+                    Console.WriteLine($"  [{kindLabel}] {result.FullName}{marker}");
                 }
 
                 CommonOptions.WriteTruncationFooter(total, limit, NarrowHint);

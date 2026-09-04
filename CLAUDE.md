@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build everything
 dotnet build nuget-docs.slnx
 
-# Run integration tests (123 tests, hits NuGet.org)
+# Run integration tests (135 tests, hits NuGet.org)
 dotnet test src/NugetDocs.IntegrationTests/
 
 # Run a single test
@@ -69,6 +69,19 @@ Rules when adding a limit to a new command:
 - Apply the limit to every output mode, JSON and CSV included, so consumers never see a different row count than the text mode.
 - Never write the footer in CSV mode — CSV must stay machine-parseable.
 - Any test that compares "more content" by output **character length** breaks once a cap applies — internal members carry no XML docs, so a capped larger listing can be shorter text. Compare row counts, or pass `--limit 0` / `--max-lines 0` on both sides.
+
+### Deprecation
+
+`TypeInspector.GetObsoleteMessage(IEntity)` reads `System.ObsoleteAttribute` off a type or member;
+`TypeInfo`, `SearchResult` and `MemberSignature` all carry a nullable `ObsoleteMessage` (null = not
+deprecated, empty string = deprecated without a message — so test for `is not null`, never for
+truthiness). `SearchResult` deliberately lets a member inherit its declaring type's deprecation;
+`GetMemberSignatures` does not, because `diff` needs the member's own state.
+
+`diff` detects two separate transitions, since adding `[Obsolete]` leaves the signature identical
+and the key-based member comparison sees nothing: `ChangedType.NewlyDeprecated` for a type, and
+`MemberChanges.Deprecated` for members. Neither is treated as breaking (deprecated code compiles),
+but `IsPurelyAdditive` returns false for them so `--no-additive` keeps them.
 
 ### Grouped Output
 

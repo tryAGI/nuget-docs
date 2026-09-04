@@ -67,6 +67,13 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                     {
                         var reflectionName = fromType!.ReflectionName;
 
+                        // A whole type gaining [Obsolete] is the common deprecation shape, and it
+                        // never shows up in a member-signature comparison.
+                        var newlyDeprecated =
+                            fromType.ObsoleteMessage is null && toType!.ObsoleteMessage is not null
+                                ? toType.ObsoleteMessage
+                                : null;
+
                         if (memberDiff)
                         {
                             // Member-level comparison
@@ -74,10 +81,12 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                             var toMembers = toInspector.GetMemberSignatures(reflectionName);
                             var memberChanges = CompareMemberSignatures(fromMembers, toMembers);
 
-                            if (memberChanges is not null)
+                            if (memberChanges is not null || newlyDeprecated is not null)
                             {
-                                var isBreaking = memberChanges.Removed.Count > 0 || memberChanges.Changed.Count > 0;
-                                changed.Add(new ChangedType(toType!, "", "", isBreaking, memberChanges));
+                                var isBreaking = memberChanges is not null &&
+                                    (memberChanges.Removed.Count > 0 || memberChanges.Changed.Count > 0);
+                                changed.Add(new ChangedType(
+                                    toType!, "", "", isBreaking, memberChanges, newlyDeprecated));
                             }
                         }
                         else
@@ -94,7 +103,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                             {
                                 var isBreaking = HasBreakingChanges(fromCompare, toCompare);
                                 // Store original sources for display (with docs), but use stripped for comparison
-                                changed.Add(new ChangedType(toType!, fromSource, toSource, isBreaking, null));
+                                changed.Add(new ChangedType(
+                                    toType!, fromSource, toSource, isBreaking, null, newlyDeprecated));
                             }
                         }
                     }
@@ -165,6 +175,19 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var addedMembers = new List<TypeInspector.MemberSignature>();
         var removedMembers = new List<TypeInspector.MemberSignature>();
 
+        // A member that gains [Obsolete] keeps its signature, so the key-based passes below see no
+        // change at all. Catch that transition separately — it is the migration signal.
+        var deprecatedMembers = new List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)>();
+        foreach (var (key, fromMember) in fromByKey)
+        {
+            if (toByKey.TryGetValue(key, out var toMember) &&
+                fromMember.ObsoleteMessage is null &&
+                toMember.ObsoleteMessage is not null)
+            {
+                deprecatedMembers.Add((fromMember, toMember));
+            }
+        }
+
         // Check for removed/changed members
         foreach (var (key, member) in fromByKey)
         {
@@ -183,7 +206,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             }
         }
 
-        if (addedMembers.Count == 0 && removedMembers.Count == 0)
+        if (addedMembers.Count == 0 && removedMembers.Count == 0 && deprecatedMembers.Count == 0)
         {
             return null;
         }
@@ -214,12 +237,13 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var pureRemoved = removedMembers.Where((_, i) => !matchedRemoved.Contains(i)).ToList();
         var pureAdded = addedMembers.Where((_, i) => !matchedAdded.Contains(i)).ToList();
 
-        if (pureAdded.Count == 0 && pureRemoved.Count == 0 && changedMembers.Count == 0)
+        if (pureAdded.Count == 0 && pureRemoved.Count == 0 && changedMembers.Count == 0 &&
+            deprecatedMembers.Count == 0)
         {
             return null;
         }
 
-        return new MemberChanges(pureAdded, pureRemoved, changedMembers);
+        return new MemberChanges(pureAdded, pureRemoved, changedMembers, deprecatedMembers);
     }
 
     /// <summary>
@@ -255,10 +279,16 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
     /// </summary>
     private static bool IsPurelyAdditive(ChangedType c, bool ignoreDocs)
     {
+        if (c.NewlyDeprecated is not null)
+        {
+            return false;
+        }
+
         // Member-level diff: purely additive if no removals and no changed signatures
         if (c.Members is not null)
         {
-            return c.Members.Removed.Count == 0 && c.Members.Changed.Count == 0;
+            return c.Members.Removed.Count == 0 && c.Members.Changed.Count == 0 &&
+                c.Members.Deprecated.Count == 0;
         }
 
         // Source-level diff: purely additive if no significant lines were deleted
@@ -408,6 +438,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                         name = c.Type.Name,
                         fullName = c.Type.FullName,
                         isBreaking = c.IsBreaking,
+                        newlyDeprecated = c.NewlyDeprecated,
                         addedMembers = c.Members.Added.Select(m => new { m.Kind, m.Name, m.Signature }),
                         removedMembers = c.Members.Removed.Select(m => new { m.Kind, m.Name, m.Signature }),
                         changedMembers = c.Members.Changed.Select(m => new
@@ -417,6 +448,13 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                             fromSignature = m.From.Signature,
                             toSignature = m.To.Signature,
                         }),
+                        deprecatedMembers = c.Members.Deprecated.Select(m => new
+                        {
+                            kind = m.To.Kind,
+                            name = m.To.Name,
+                            signature = m.To.Signature,
+                            deprecationMessage = m.To.ObsoleteMessage,
+                        }),
                     }
                     : new
                     {
@@ -424,6 +462,7 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                         name = c.Type.Name,
                         fullName = c.Type.FullName,
                         isBreaking = c.IsBreaking,
+                        newlyDeprecated = c.NewlyDeprecated,
                         fromSource = c.FromSource,
                         toSource = c.ToSource,
                     }),
@@ -504,7 +543,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             foreach (var c in changed)
             {
                 var label = c.IsBreaking ? " ⚠" : "";
-                Console.WriteLine($"  ~ [{c.Type.Kind}] {c.Type.FullName}{label}");
+                var deprecatedLabel = c.NewlyDeprecated is not null ? " ** now deprecated" : "";
+                Console.WriteLine($"  ~ [{c.Type.Kind}] {c.Type.FullName}{label}{deprecatedLabel}");
             }
             Console.WriteLine();
 
@@ -519,6 +559,13 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                     var label = c.IsBreaking ? " (BREAKING)" : "";
                     Console.WriteLine($"=== {c.Type.FullName}{label} ===");
                     Console.WriteLine();
+
+                    if (c.NewlyDeprecated is not null)
+                    {
+                        var reason = c.NewlyDeprecated.Length > 0 ? $": {c.NewlyDeprecated}" : "";
+                        Console.WriteLine($"  ! type is now deprecated{reason}");
+                        Console.WriteLine();
+                    }
 
                     if (memberDiff && c.Members is not null)
                     {
@@ -574,6 +621,15 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                 Console.WriteLine($"    + {to.Signature}");
             }
         }
+
+        if (members.Deprecated.Count > 0)
+        {
+            foreach (var (_, to) in members.Deprecated)
+            {
+                var reason = to.ObsoleteMessage is { Length: > 0 } message ? $": {message}" : "";
+                Console.WriteLine($"  ! [{to.Kind}] {to.Signature}  // now deprecated{reason}");
+            }
+        }
     }
 
     private sealed record ChangedType(
@@ -581,10 +637,12 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         string FromSource,
         string ToSource,
         bool IsBreaking,
-        MemberChanges? Members);
+        MemberChanges? Members,
+        string? NewlyDeprecated = null);
 
     private sealed record MemberChanges(
         List<TypeInspector.MemberSignature> Added,
         List<TypeInspector.MemberSignature> Removed,
-        List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> Changed);
+        List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> Changed,
+        List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> Deprecated);
 }

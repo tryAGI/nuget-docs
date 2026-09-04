@@ -231,4 +231,28 @@ public class ShowCommandTests
         output.Should().Contain("Methods:");
         output.Should().Contain("Fields:");
     }
+
+    [TestMethod]
+    public async Task Show_Signatures_MarksDeprecatedType()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonSchema", "--signatures");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("// ** deprecated");
+        output.Should().Contain("moved to its own package");
+    }
+
+    [TestMethod]
+    public async Task Show_Signatures_MarksDeprecatedMembers()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Newtonsoft.Json", "JsonSerializerSettings", "--signatures");
+
+        exitCode.Should().Be(0);
+        // The type itself is not obsolete, but three of its properties are. The header marker
+        // starts a line; member markers trail a signature, so anchor on the newline.
+        output.Should().NotContain("\n// ** deprecated");
+        output.Should().Contain("** deprecated: Binder is obsolete");
+    }
 }

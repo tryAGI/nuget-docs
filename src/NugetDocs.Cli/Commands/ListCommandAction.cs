@@ -14,6 +14,7 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
         var framework = parseResult.GetValue(command.FrameworkOption);
         var showAll = parseResult.GetValue(command.AllOption);
         var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
+        var deprecatedOnly = parseResult.GetValue(command.DeprecatedOption);
         var limit = parseResult.GetValue(command.LimitOption);
         var format = parseResult.GetValue(command.FormatOption);
         var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
@@ -30,6 +31,11 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
             var filtered = namespaceFilter is not null
                 ? allTypes.Where(t => t.Namespace.StartsWith(namespaceFilter, StringComparison.OrdinalIgnoreCase)).ToList()
                 : allTypes;
+
+            if (deprecatedOnly)
+            {
+                filtered = filtered.Where(t => t.ObsoleteMessage is not null).ToList();
+            }
 
             var total = filtered.Count;
             var types = CommonOptions.ApplyLimit(filtered, limit);
@@ -53,20 +59,22 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
                         fullName = t.FullName,
                         @namespace = t.Namespace,
                         summary = xmlDocs?.GetTypeSummary(t.FullName),
+                        deprecated = t.ObsoleteMessage is not null,
+                        deprecationMessage = t.ObsoleteMessage,
                     }),
                 };
                 Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
             }
             else if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("Kind,Name,FullName,Namespace,Summary");
+                Console.WriteLine("Kind,Name,FullName,Namespace,Summary,Deprecated");
                 foreach (var type in types)
                 {
                     var displayName = type.GenericParameterCount > 0
                         ? $"{type.Name}<{new string(',', type.GenericParameterCount - 1)}>"
                         : type.Name;
                     var summary = xmlDocs?.GetTypeSummary(type.FullName) ?? "";
-                    Console.WriteLine($"{type.Kind},{CommonOptions.CsvEscape(displayName)},{CommonOptions.CsvEscape(type.FullName)},{CommonOptions.CsvEscape(type.Namespace)},{CommonOptions.CsvEscape(summary)}");
+                    Console.WriteLine($"{type.Kind},{CommonOptions.CsvEscape(displayName)},{CommonOptions.CsvEscape(type.FullName)},{CommonOptions.CsvEscape(type.Namespace)},{CommonOptions.CsvEscape(summary)},{CommonOptions.CsvEscape(type.ObsoleteMessage ?? "")}");
                 }
             }
             else if (string.Equals(format, "table", StringComparison.OrdinalIgnoreCase))
@@ -81,7 +89,7 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
                         ? $"{t.Name}<{new string(',', t.GenericParameterCount - 1)}>"
                         : t.Name,
                     Namespace = t.Namespace,
-                    Summary = xmlDocs?.GetTypeSummary(t.FullName) ?? "",
+                    Summary = Decorate(xmlDocs?.GetTypeSummary(t.FullName) ?? "", t.ObsoleteMessage),
                 }).ToList();
 
                 var colKind = Math.Max("Kind".Length, rows.Count > 0 ? rows.Max(r => r.Kind.Length) : 0);
@@ -112,8 +120,11 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
                             ? $"{t.Name}<{new string(',', t.GenericParameterCount - 1)}>"
                             : t.Name;
 
+                        var marker = t.ObsoleteMessage is not null ? " ** deprecated" : "";
                         var summary = xmlDocs?.GetTypeSummary(t.FullName);
-                        return summary is not null ? $"{displayName} — {summary}" : displayName;
+                        return summary is not null
+                            ? $"{displayName}{marker} — {summary}"
+                            : $"{displayName}{marker}";
                     },
                     write: Console.WriteLine,
                     order: GetKindOrder);
@@ -128,6 +139,20 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
             Console.Error.WriteLine($"Error: {ex.Message}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Prefixes a free-form cell with the deprecation marker, keeping the table's column count.
+    /// </summary>
+    private static string Decorate(string summary, string? obsoleteMessage)
+    {
+        if (obsoleteMessage is null)
+        {
+            return summary;
+        }
+
+        var marker = obsoleteMessage.Length > 0 ? $"** deprecated: {obsoleteMessage}" : "** deprecated";
+        return summary.Length > 0 ? $"{marker} — {summary}" : marker;
     }
 
     private static int GetKindOrder(string kind) => kind switch
