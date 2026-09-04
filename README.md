@@ -44,6 +44,7 @@ nuget-docs list Newtonsoft.Json --namespace Newtonsoft.Json.Linq
 nuget-docs list Humanizer --all          # include internal types
 nuget-docs list AWSSDK.EC2 --limit 50    # cap the listing (default: 200, 0 = all)
 nuget-docs list Newtonsoft.Json --deprecated    # only [Obsolete] types
+nuget-docs list Microsoft.Extensions.AI.Abstractions --experimental  # only [Experimental] types
 nuget-docs list Newtonsoft.Json --format table  # aligned columns
 nuget-docs list Newtonsoft.Json --format csv    # CSV output
 ```
@@ -159,6 +160,7 @@ nuget-docs versions Humanizer --format csv              # CSV output
 | `--max-lines <n>` | | Maximum source lines for `show` (default: 1000, `0` = all) |
 | `--signatures` | `-s` | `show` only: member signatures without bodies |
 | `--deprecated` | | `list`/`search`: only `[Obsolete]` API. On `versions`: registry deprecation info |
+| `--experimental` | | `list`/`search`: only `[Experimental]` API (MEAI001, SKEXP0001, …) |
 | `--format <fmt>` | | Output format for `list`/`search`/`versions`/`deps`/`diff`: `grouped` (default), `table`, `csv` |
 | `--deprecated` | | Show deprecation/vulnerability info (for `versions`) |
 | `--json` | `-j` | JSON output (shorthand for `--output json`) |
@@ -179,7 +181,7 @@ nuget-docs versions Humanizer --format csv              # CSV output
 - Framework-aware: picks best matching TFM (net10.0 > net9.0 > ... > netstandard2.0)
 - Context-budgeted output — `list`/`search`/`deps` cap at 200 rows, `show` at 1,000 lines, each with a `... and N more` footer; JSON carries `total`/`truncated`
 - Signature-only view (`show --signatures`) for surveying large types without decompiling bodies
-- Deprecation discovery — `[Obsolete]` types and members are marked and filterable, and `diff --member-diff` reports what *became* obsolete between versions
+- Deprecation and stability discovery — `[Obsolete]` and `[Experimental]` types and members are marked and filterable, and `diff` reports transitions in both directions (including graduation to stable) without decompiling
 - AI-optimized plain text output
 - JSON output on all commands
 - Tab completion via `dotnet-suggest`

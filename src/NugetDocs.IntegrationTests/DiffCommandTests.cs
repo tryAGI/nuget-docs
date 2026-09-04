@@ -206,4 +206,44 @@ public class DiffCommandTests
         output.Should().Contain("\"newlyDeprecated\"");
         output.Should().Contain("\"deprecatedMembers\"");
     }
+
+    [TestMethod]
+    public async Task Diff_TypeOnly_ReportsDeprecationWithoutDecompiling()
+    {
+        // --type-only skips decompilation, but stability is metadata and costs nothing.
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "9.0.1", "--to", "10.0.3", "--type-only");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("** now deprecated");
+        output.Should().Contain("BsonReader");
+        // The reason rides on the summary line here, since there is no detail section.
+        output.Should().Contain("moved to its own package");
+    }
+
+    [TestMethod]
+    public async Task Diff_DetectsGraduationOutOfExperimental()
+    {
+        // Semantic Kernel stabilized several SKEXP0001 types between these versions. Losing
+        // [Experimental] is the direction that actually happens in practice.
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Microsoft.SemanticKernel.Abstractions",
+            "--from", "1.15.0", "--to", "1.30.0", "--type-only");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("no longer experimental (was SKEXP0001)");
+        output.Should().Contain("FunctionCallContent");
+    }
+
+    [TestMethod]
+    public async Task Diff_MemberDiff_SummaryStaysTerse()
+    {
+        // With a detail section present the summary must not repeat the reason.
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "9.0.1", "--to", "10.0.3", "--member-diff");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("** now deprecated\n");
+        output.Should().Contain("! type is now deprecated: BSON");
+    }
 }

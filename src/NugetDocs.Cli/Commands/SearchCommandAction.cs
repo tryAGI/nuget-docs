@@ -16,6 +16,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
         var showAll = parseResult.GetValue(command.AllOption);
         var namespaceFilter = parseResult.GetValue(command.NamespaceOption);
         var deprecatedOnly = parseResult.GetValue(command.DeprecatedOption);
+        var experimentalOnly = parseResult.GetValue(command.ExperimentalOption);
         var limit = parseResult.GetValue(command.LimitOption);
         var format = parseResult.GetValue(command.FormatOption);
         var jsonOutput = CommonOptions.IsJsonOutput(parseResult, command.OutputOption, command.JsonOption);
@@ -35,6 +36,11 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
             if (deprecatedOnly)
             {
                 filtered = filtered.Where(r => r.ObsoleteMessage is not null).ToList();
+            }
+
+            if (experimentalOnly)
+            {
+                filtered = filtered.Where(r => r.ExperimentalId is not null).ToList();
             }
 
             var total = filtered.Count;
@@ -65,16 +71,18 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                         fullName = r.FullName,
                         deprecated = r.ObsoleteMessage is not null,
                         deprecationMessage = r.ObsoleteMessage,
+                        experimental = r.ExperimentalId is not null,
+                        experimentalId = r.ExperimentalId,
                     }),
                 };
                 Console.WriteLine(JsonSerializer.Serialize(json, JsonOptions.Indented));
             }
             else if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("Kind,MemberKind,Name,FullName,Deprecated");
+                Console.WriteLine("Kind,MemberKind,Name,FullName,Deprecated,Experimental");
                 foreach (var result in results)
                 {
-                    Console.WriteLine($"{result.Kind},{result.MemberKind ?? ""},{CommonOptions.CsvEscape(result.Name)},{CommonOptions.CsvEscape(result.FullName)},{CommonOptions.CsvEscape(result.ObsoleteMessage ?? "")}");
+                    Console.WriteLine($"{result.Kind},{result.MemberKind ?? ""},{CommonOptions.CsvEscape(result.Name)},{CommonOptions.CsvEscape(result.FullName)},{CommonOptions.CsvEscape(result.ObsoleteMessage ?? "")},{CommonOptions.CsvEscape(result.ExperimentalId ?? "")}");
                 }
             }
             else if (string.Equals(format, "table", StringComparison.OrdinalIgnoreCase))
@@ -88,7 +96,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                 {
                     Kind = r.MemberKind is not null ? $"{r.Kind}.{r.MemberKind}" : r.Kind,
                     Name = r.Name,
-                    FullName = r.ObsoleteMessage is not null ? $"{r.FullName} ** deprecated" : r.FullName,
+                    FullName = Decorate(r.FullName, r.ObsoleteMessage, r.ExperimentalId),
                 }).ToList();
 
                 var colKind = Math.Max("Kind".Length, rows.Count > 0 ? rows.Max(r => r.Kind.Length) : 0);
@@ -117,8 +125,8 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                         ? $"{result.Kind}.{result.MemberKind}"
                         : result.Kind;
 
-                    var marker = result.ObsoleteMessage is not null ? " ** deprecated" : "";
-                    Console.WriteLine($"  [{kindLabel}] {result.FullName}{marker}");
+                    Console.WriteLine(
+                        $"  [{kindLabel}] {Decorate(result.FullName, result.ObsoleteMessage, result.ExperimentalId)}");
                 }
 
                 CommonOptions.WriteTruncationFooter(total, limit, NarrowHint);
@@ -133,4 +141,12 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
         }
     }
 
+    /// <summary>
+    /// Appends the stability marker to a result's name, leaving unmarked names untouched.
+    /// </summary>
+    private static string Decorate(string name, string? obsoleteMessage, string? experimentalId)
+    {
+        var marker = CommonOptions.FormatStability(obsoleteMessage, experimentalId);
+        return marker.Length > 0 ? $"{name} {marker}" : name;
+    }
 }

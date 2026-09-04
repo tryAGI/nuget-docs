@@ -37,7 +37,7 @@ Use `nuget-docs` when you need to:
 ### List all public types
 
 ```bash
-nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--deprecated] [--limit <n>] [--format table|csv] [--json] [--output json]
+nuget-docs list <Package> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--deprecated] [--experimental] [--limit <n>] [--format table|csv] [--json] [--output json]
 ```
 
 Shows all public types grouped by kind (Interfaces, Classes, Structs, Enums, Delegates) with one-line XML doc summaries. Use `--all` (`-a`) to include internal types. Use `--namespace` (`-n`) to filter by namespace prefix. Use `--format table` for aligned columns or `--format csv` for CSV output. **Capped at 200 types by default** — use `--limit <n>` to change it or `--limit 0` for the full listing.
@@ -55,7 +55,7 @@ Decompiles the full type to C# source with `///` XML documentation comments. **S
 ### Search types and members
 
 ```bash
-nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--deprecated] [--limit <n>] [--format table|csv] [--json] [--output json]
+nuget-docs search <Package> <pattern> [--version <ver>] [--framework <tfm>] [--all] [--namespace <prefix>] [--deprecated] [--experimental] [--limit <n>] [--format table|csv] [--json] [--output json]
 ```
 
 Searches types and members using glob patterns (`*` and `?` wildcards). Results show `[Kind.MemberKind]` labels. By default searches only public/protected members; use `--all` (`-a`) to include private and internal. Use `--namespace` (`-n`) to filter by namespace prefix. Use `--format table` for aligned columns or `--format csv` for CSV output. **Capped at 200 results by default** — use `--limit <n>` to change it or `--limit 0` for everything.
@@ -92,9 +92,9 @@ nuget-docs versions <Package> [--stable] [--prerelease] [--latest] [--since <ver
 
 Lists all available versions of a package from NuGet.org, newest first. Use `--stable` (`-s`) to show only stable versions. Use `--prerelease` (`-p`) to show only prerelease versions. Use `--latest` to show only the latest stable and latest prerelease versions. Use `--since` to show only versions newer than the specified version. Use `--count` (`-c`) to output only the count of matching versions (useful for CI). Use `--deprecated` to show deprecation and vulnerability info for each version. Use `--format table` for aligned columns or `--format csv` for CSV output. Use `--limit` (`-l`) to control how many to show (default: 20, 0 = all).
 
-## Finding Deprecated API
+## Finding Deprecated and Experimental API
 
-Two different things can be deprecated, and they are answered by different commands.
+Three different things can be unstable, and they are answered by different commands.
 
 **Deprecated packages and versions** — from the NuGet registry:
 
@@ -103,29 +103,36 @@ nuget-docs versions <pkg> --deprecated   # per-version deprecation + vulnerabili
 nuget-docs info <pkg>                    # always shows it, with the alternate package
 ```
 
-**Deprecated API — types and members carrying `[Obsolete]`** — read from the assembly:
+**Deprecated API — `[Obsolete]`** and **unstable API — `[Experimental]`** — read from the assembly:
 
 ```bash
-nuget-docs list <pkg> --deprecated               # only obsolete types
-nuget-docs search <pkg> "*Binder*" --deprecated  # only obsolete matches
-nuget-docs show <pkg> <Type> --signatures        # marks the type and each obsolete member
-nuget-docs diff <pkg> --from A --to B --member-diff   # what BECAME obsolete between versions
+nuget-docs list <pkg> --deprecated                  # only obsolete types
+nuget-docs list <pkg> --experimental                # only [Experimental] types
+nuget-docs search <pkg> "*Binder*" --deprecated     # only obsolete matches
+nuget-docs show <pkg> <Type> --signatures           # marks the type and each marked member
+nuget-docs diff <pkg> --from A --to B --type-only   # stability transitions, no decompilation
 ```
+
+`[Experimental]` is how modern packages flag "do not rely on this yet" — `Microsoft.Extensions.AI`
+uses `MEAI001`, Semantic Kernel uses `SKEXP****`. For an agent it is the same signal as
+deprecation, so it is reported the same way, with the diagnostic id as the reason.
 
 `list` and `search` mark obsolete entries with `** deprecated` even without the flag, and carry
 `deprecated`/`deprecationMessage` in JSON plus a `Deprecated` column in CSV. In `search`, a member
 of an obsolete type is reported as deprecated too.
 
-`diff --member-diff` reports both shapes, since a deprecation leaves the signature untouched and
-would otherwise look like no change at all:
+`diff` reports stability transitions at both type and member level, since adding or removing an
+attribute leaves the signature untouched and would otherwise look like no change at all:
 
-- `~ [Class] Foo ** now deprecated` with a `! type is now deprecated: <reason>` detail — the type
-  gained `[Obsolete]`
-- `! [Property] ... // now deprecated: <reason>` — a member gained `[Obsolete]`
+- `** now deprecated` — gained `[Obsolete]`
+- `** now experimental: MEAI001` — gained `[Experimental]`
+- `** no longer experimental (was SKEXP0001)` — **graduated to stable**, which is by far the most
+  common of the three in real packages
 
-These are **not** counted as breaking changes (deprecated code still compiles), so `--breaking`
-and exit code 2 ignore them — but `--no-additive` keeps them, which is the flag to use for an
-upgrade-migration review.
+These need no decompilation, so **`--type-only` reports them too** — that is the cheapest way to
+answer "what should I stop using before upgrading?". They are **not** counted as breaking changes
+(the code still compiles), so `--breaking` and exit code 2 ignore them, but `--no-additive` keeps
+them, which is the flag for an upgrade-migration review.
 
 ## Context Budgeting
 
@@ -209,6 +216,7 @@ between versions; add `--breaking` or `--no-additive` to cut it further.
 - **For large packages**: Use `search` before `show` to narrow down. `list`/`search` truncate at 200 rows by default — when you see the `... and N more` footer, narrow with `--namespace` or a tighter pattern instead of `--limit 0`
 - **Result limit**: `--limit <n>` (`-l`) sets the cap on `list`/`search`/`deps` (default 200, `0` = unlimited). JSON output carries `total` and `truncated` (`Total`/`Truncated` for `deps`) so you can tell when rows were hidden; CSV output is trimmed but never gets a footer, so it stays parseable
 - **Source limit**: `show` caps at 1,000 lines (`--max-lines <n>`, `0` = unlimited) and reports `totalLines`/`truncated` in JSON
+- **Experimental**: `--experimental` filters `list`/`search` to `[Experimental]` API, marked `** experimental: <id>`; JSON carries `experimental`/`experimentalId` and CSV an `Experimental` column
 - **Deprecation**: `--deprecated` filters `list`/`search` to `[Obsolete]` API; obsolete entries are marked `** deprecated` in normal output too. Use `diff --member-diff` to see what *became* obsolete between two versions — that transition is invisible to `--breaking`, since the signature never changes
 - **Signature overview**: `show <pkg> <Type> --signatures` (`-s`) lists public/protected member signatures without bodies — the cheap way to survey a large type before deciding what to read in full
 - **Version pinning**: Use `--version` to inspect a specific version. Supports `latest`, `latest-stable`, and `latest-prerelease` keywords on any command

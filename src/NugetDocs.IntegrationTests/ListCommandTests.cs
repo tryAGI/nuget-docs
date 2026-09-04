@@ -280,4 +280,39 @@ public class ListCommandTests
         output.Should().Contain("\"deprecated\": true");
         output.Should().Contain("\"deprecationMessage\"");
     }
+
+    [TestMethod]
+    public async Task List_Experimental_FiltersToExperimentalTypes()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Microsoft.Extensions.AI.Abstractions", "--experimental");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("** experimental: MEAI001");
+        output.Should().Contain("ISpeechToTextClient");
+        // IChatClient is stable and must not appear.
+        output.Should().NotContain("  IChatClient ");
+    }
+
+    [TestMethod]
+    public async Task List_CsvCarriesExperimentalColumn()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Microsoft.Extensions.AI.Abstractions", "--experimental", "--format", "csv");
+
+        exitCode.Should().Be(0);
+        output.Should().StartWith("Kind,Name,FullName,Namespace,Summary,Deprecated,Experimental");
+        output.Should().Contain("MEAI001");
+    }
+
+    [TestMethod]
+    public async Task List_JsonCarriesExperimental()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Microsoft.Extensions.AI.Abstractions", "--experimental", "--json");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("\"experimental\": true");
+        output.Should().Contain("\"experimentalId\": \"MEAI001\"");
+    }
 }

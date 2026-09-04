@@ -22,6 +22,11 @@ internal sealed class ListCommand : Command
         Description = "Show only deprecated ([Obsolete]) types",
         DefaultValueFactory = _ => false,
     };
+    public Option<bool> ExperimentalOption { get; } = new("--experimental")
+    {
+        Description = "Show only experimental ([Experimental]) types",
+        DefaultValueFactory = _ => false,
+    };
     public Option<int> LimitOption { get; } = CommonOptions.Limit;
     public Option<string?> FormatOption { get; } = CommonOptions.Format;
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
@@ -35,6 +40,7 @@ internal sealed class ListCommand : Command
         Options.Add(AllOption);
         Options.Add(NamespaceOption);
         Options.Add(DeprecatedOption);
+        Options.Add(ExperimentalOption);
         Options.Add(LimitOption);
         Options.Add(FormatOption);
         Options.Add(OutputOption);

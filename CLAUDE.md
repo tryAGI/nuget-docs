@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build everything
 dotnet build nuget-docs.slnx
 
-# Run integration tests (135 tests, hits NuGet.org)
+# Run integration tests (142 tests, hits NuGet.org)
 dotnet test src/NugetDocs.IntegrationTests/
 
 # Run a single test
@@ -72,16 +72,30 @@ Rules when adding a limit to a new command:
 
 ### Deprecation
 
-`TypeInspector.GetObsoleteMessage(IEntity)` reads `System.ObsoleteAttribute` off a type or member;
-`TypeInfo`, `SearchResult` and `MemberSignature` all carry a nullable `ObsoleteMessage` (null = not
-deprecated, empty string = deprecated without a message — so test for `is not null`, never for
-truthiness). `SearchResult` deliberately lets a member inherit its declaring type's deprecation;
-`GetMemberSignatures` does not, because `diff` needs the member's own state.
+`TypeInspector.GetObsoleteMessage(IEntity)` reads `System.ObsoleteAttribute` and
+`GetExperimentalId(IEntity)` reads `System.Diagnostics.CodeAnalysis.ExperimentalAttribute` — the
+latter needs its own reader because its first constructor argument is a diagnostic id (`MEAI001`),
+not a message. `TypeInfo`, `SearchResult` and `MemberSignature` carry nullable `ObsoleteMessage`
+and `ExperimentalId` (null = unmarked, empty string = marked without detail — so test for
+`is not null`, never for truthiness). `SearchResult` deliberately lets a member inherit its
+declaring type's markers; `GetMemberSignatures` does not, because `diff` needs the member's own
+state.
 
-`diff` detects two separate transitions, since adding `[Obsolete]` leaves the signature identical
-and the key-based member comparison sees nothing: `ChangedType.NewlyDeprecated` for a type, and
-`MemberChanges.Deprecated` for members. Neither is treated as breaking (deprecated code compiles),
-but `IsPurelyAdditive` returns false for them so `--no-additive` keeps them.
+Formatting lives in two places by design: `CommonOptions.FormatStability` describes **current**
+state (`list`, `search`, `show --signatures`), while `DiffCommandAction.FormatTransition` describes
+**changes** — they share only `CommonOptions.StabilityMarker`.
+
+Measured on real packages: types gaining `[Experimental]` essentially never happens between
+released versions; **losing** it (graduating to stable) is the common case, so `diff` detects both
+directions. Semantic Kernel 1.15.0 -> 1.30.0 stabilizes 9 `SKEXP0001` types.
+
+`diff` detects these transitions separately, since attaching or removing an attribute leaves the
+signature identical and the key-based member comparison sees nothing: `ChangedType` carries
+`NewlyDeprecated` / `NewlyExperimental` / `NoLongerExperimental`, and `MemberChanges` carries the
+matching `Deprecated` / `NowExperimental` / `NoLongerExperimental` lists. None is treated as
+breaking (the code still compiles), but `IsPurelyAdditive` returns false for them so
+`--no-additive` keeps them. Because they are pure metadata, `--type-only` reports them without
+decompiling anything.
 
 ### Grouped Output
 

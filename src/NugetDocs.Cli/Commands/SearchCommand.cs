@@ -26,6 +26,11 @@ internal sealed class SearchCommand : Command
         Description = "Show only deprecated ([Obsolete]) results",
         DefaultValueFactory = _ => false,
     };
+    public Option<bool> ExperimentalOption { get; } = new("--experimental")
+    {
+        Description = "Show only experimental ([Experimental]) results",
+        DefaultValueFactory = _ => false,
+    };
     public Option<int> LimitOption { get; } = CommonOptions.Limit;
     public Option<string?> FormatOption { get; } = CommonOptions.Format;
     public Option<string?> OutputOption { get; } = CommonOptions.Output;
@@ -40,6 +45,7 @@ internal sealed class SearchCommand : Command
         Options.Add(AllOption);
         Options.Add(NamespaceOption);
         Options.Add(DeprecatedOption);
+        Options.Add(ExperimentalOption);
         Options.Add(LimitOption);
         Options.Add(FormatOption);
         Options.Add(OutputOption);

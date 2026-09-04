@@ -255,4 +255,14 @@ public class ShowCommandTests
         output.Should().NotContain("\n// ** deprecated");
         output.Should().Contain("** deprecated: Binder is obsolete");
     }
+
+    [TestMethod]
+    public async Task Show_Signatures_MarksExperimentalType()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "show", "Microsoft.Extensions.AI.Abstractions", "ISpeechToTextClient", "--signatures");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("// ** experimental: MEAI001");
+    }
 }

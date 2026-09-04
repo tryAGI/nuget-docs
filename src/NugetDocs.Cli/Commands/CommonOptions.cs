@@ -134,6 +134,54 @@ internal static class CommonOptions
     }
 
     /// <summary>
+    /// Prefix marking an API-stability note. Matches the marker `versions` already uses for
+    /// registry deprecation, so package-level and API-level notes read the same.
+    /// </summary>
+    public const string StabilityMarker = "**";
+
+    /// <summary>
+    /// Renders the stability suffix for a type or member: <c>** deprecated: reason</c>,
+    /// <c>** experimental: ID</c>, or both. Returns an empty string when the API is neither.
+    /// </summary>
+    public static string FormatStability(
+        string? obsoleteMessage,
+        string? experimentalId,
+        string verb = "deprecated",
+        bool withMarker = true)
+    {
+        var parts = new List<string>();
+
+        if (obsoleteMessage is not null)
+        {
+            parts.Add(obsoleteMessage.Length > 0 ? $"{verb}: {obsoleteMessage}" : verb);
+        }
+
+        if (experimentalId is not null)
+        {
+            var experimentalVerb = string.Equals(verb, "deprecated", StringComparison.Ordinal)
+                ? "experimental"
+                : "now experimental";
+            parts.Add(experimentalId.Length > 0 ? $"{experimentalVerb}: {experimentalId}" : experimentalVerb);
+        }
+
+        if (parts.Count == 0)
+        {
+            return "";
+        }
+
+        var text = string.Join("; ", parts);
+        return withMarker ? $"{StabilityMarker} {text}" : text;
+    }
+
+    /// <summary>
+    /// True when an API carries any stability marker.
+    /// </summary>
+    public static bool IsMarked(string? obsoleteMessage, string? experimentalId)
+    {
+        return obsoleteMessage is not null || experimentalId is not null;
+    }
+
+    /// <summary>
     /// Renders items grouped by kind: a pluralized heading, two-space indented lines, and a blank
     /// line after each group. Shared by <c>list</c> (types) and <c>show --signatures</c> (members).
     /// Writing goes through <paramref name="write"/> so callers can target the console or a buffer.

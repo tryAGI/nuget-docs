@@ -60,7 +60,8 @@ internal sealed partial class TypeInspector : IDisposable
                 Accessibility: type.Accessibility.ToString(),
                 GenericParameterCount: type.TypeParameterCount,
                 ReflectionName: type.FullTypeName.ReflectionName,
-                ObsoleteMessage: GetObsoleteMessage(type)));
+                ObsoleteMessage: GetObsoleteMessage(type),
+                ExperimentalId: GetExperimentalId(type)));
         }
 
         return types.OrderBy(t => t.Namespace).ThenBy(t => t.Name).ToList();
@@ -322,7 +323,8 @@ internal sealed partial class TypeInspector : IDisposable
                     FullName: type.FullName,
                     Name: type.Name,
                     MemberKind: null,
-                    ObsoleteMessage: GetObsoleteMessage(type)));
+                    ObsoleteMessage: GetObsoleteMessage(type),
+                    ExperimentalId: GetExperimentalId(type)));
             }
 
             // Search members
@@ -341,8 +343,9 @@ internal sealed partial class TypeInspector : IDisposable
                         FullName: $"{type.FullName}.{member.Name}",
                         Name: member.Name,
                         MemberKind: GetMemberKind(member),
-                        // A member inherits the type's deprecation when it has none of its own.
-                        ObsoleteMessage: GetObsoleteMessage(member) ?? GetObsoleteMessage(type)));
+                        // A member inherits the type's marker when it has none of its own.
+                        ObsoleteMessage: GetObsoleteMessage(member) ?? GetObsoleteMessage(type),
+                        ExperimentalId: GetExperimentalId(member) ?? GetExperimentalId(type)));
                 }
             }
         }
@@ -854,6 +857,36 @@ internal sealed partial class TypeInspector : IDisposable
             : "";
     }
 
+    /// <summary>
+    /// Reads <c>[Experimental]</c> off an entity. Returns null when absent, otherwise the
+    /// diagnostic id (e.g. "MEAI001") with the attribute's Message appended when it carries one.
+    /// </summary>
+    private static string? GetExperimentalId(IEntity entity)
+    {
+        var attribute = entity.GetAttributes()
+            .FirstOrDefault(a => string.Equals(
+                a.AttributeType.FullName,
+                "System.Diagnostics.CodeAnalysis.ExperimentalAttribute",
+                StringComparison.Ordinal));
+
+        if (attribute is null)
+        {
+            return null;
+        }
+
+        var diagnosticId = attribute.FixedArguments.Length > 0
+            ? attribute.FixedArguments[0].Value as string ?? ""
+            : "";
+
+        var message = attribute.NamedArguments
+            .FirstOrDefault(a => string.Equals(a.Name, "Message", StringComparison.Ordinal))
+            .Value as string;
+
+        return message is { Length: > 0 }
+            ? $"{diagnosticId}: {message}".TrimStart(':', ' ')
+            : diagnosticId;
+    }
+
     private static string? GetMemberKind(IMember member)
     {
         return member switch
@@ -891,25 +924,27 @@ internal sealed partial class TypeInspector : IDisposable
         string Accessibility,
         int GenericParameterCount,
         string ReflectionName,
-        string? ObsoleteMessage = null);
+        string? ObsoleteMessage = null,
+        string? ExperimentalId = null);
 
     internal sealed record SearchResult(
         string Kind,
         string FullName,
         string Name,
         string? MemberKind,
-        string? ObsoleteMessage = null);
+        string? ObsoleteMessage = null,
+        string? ExperimentalId = null);
 
     /// <summary>
     /// The type's own <c>[Obsolete]</c> message, or null when the type is not deprecated.
     /// </summary>
-    public string? GetTypeObsoleteMessage(string typeName)
+    public (string? ObsoleteMessage, string? ExperimentalId) GetTypeStability(string typeName)
     {
         var ftName = new FullTypeName(ResolveTypeName(typeName));
         var type = _decompiler.TypeSystem.MainModule.TypeDefinitions
             .FirstOrDefault(t => t.FullTypeName == ftName);
 
-        return type is null ? null : GetObsoleteMessage(type);
+        return type is null ? (null, null) : (GetObsoleteMessage(type), GetExperimentalId(type));
     }
 
     /// <summary>
@@ -944,7 +979,8 @@ internal sealed partial class TypeInspector : IDisposable
                 Name: member.Name,
                 Kind: kind,
                 Signature: signature,
-                ObsoleteMessage: GetObsoleteMessage(member)));
+                ObsoleteMessage: GetObsoleteMessage(member),
+                ExperimentalId: GetExperimentalId(member)));
         }
 
         return members.OrderBy(m => m.Kind).ThenBy(m => m.Name).ToList();
@@ -1059,5 +1095,6 @@ internal sealed partial class TypeInspector : IDisposable
         string Name,
         string Kind,
         string Signature,
-        string? ObsoleteMessage = null);
+        string? ObsoleteMessage = null,
+        string? ExperimentalId = null);
 }

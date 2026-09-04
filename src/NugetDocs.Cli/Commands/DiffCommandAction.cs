@@ -60,19 +60,40 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                 {
                     removed.Add(fromType!);
                 }
-                else if (inFrom && inTo && !typeOnly)
+                else if (inFrom && inTo)
                 {
-                    // Both exist — compare (skip if --type-only)
+                    // A whole type gaining [Obsolete] or [Experimental] never shows up in a
+                    // member-signature comparison, and needs no decompilation to spot.
+                    var newlyDeprecated =
+                        fromType!.ObsoleteMessage is null && toType!.ObsoleteMessage is not null
+                            ? toType.ObsoleteMessage
+                            : null;
+                    var newlyExperimental =
+                        fromType.ExperimentalId is null && toType!.ExperimentalId is not null
+                            ? toType.ExperimentalId
+                            : null;
+                    var noLongerExperimental =
+                        fromType.ExperimentalId is not null && toType!.ExperimentalId is null
+                            ? fromType.ExperimentalId
+                            : null;
+
+                    if (typeOnly)
+                    {
+                        // --type-only does no decompilation, but still reports these.
+                        if (newlyDeprecated is not null || newlyExperimental is not null ||
+                            noLongerExperimental is not null)
+                        {
+                            changed.Add(new ChangedType(
+                                toType!, "", "", false, null,
+                                newlyDeprecated, newlyExperimental, noLongerExperimental));
+                        }
+
+                        continue;
+                    }
+
                     try
                     {
-                        var reflectionName = fromType!.ReflectionName;
-
-                        // A whole type gaining [Obsolete] is the common deprecation shape, and it
-                        // never shows up in a member-signature comparison.
-                        var newlyDeprecated =
-                            fromType.ObsoleteMessage is null && toType!.ObsoleteMessage is not null
-                                ? toType.ObsoleteMessage
-                                : null;
+                        var reflectionName = fromType.ReflectionName;
 
                         if (memberDiff)
                         {
@@ -81,12 +102,14 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                             var toMembers = toInspector.GetMemberSignatures(reflectionName);
                             var memberChanges = CompareMemberSignatures(fromMembers, toMembers);
 
-                            if (memberChanges is not null || newlyDeprecated is not null)
+                            if (memberChanges is not null || newlyDeprecated is not null ||
+                                newlyExperimental is not null || noLongerExperimental is not null)
                             {
                                 var isBreaking = memberChanges is not null &&
                                     (memberChanges.Removed.Count > 0 || memberChanges.Changed.Count > 0);
                                 changed.Add(new ChangedType(
-                                    toType!, "", "", isBreaking, memberChanges, newlyDeprecated));
+                                    toType!, "", "", isBreaking, memberChanges,
+                                    newlyDeprecated, newlyExperimental, noLongerExperimental));
                             }
                         }
                         else
@@ -104,7 +127,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                                 var isBreaking = HasBreakingChanges(fromCompare, toCompare);
                                 // Store original sources for display (with docs), but use stripped for comparison
                                 changed.Add(new ChangedType(
-                                    toType!, fromSource, toSource, isBreaking, null, newlyDeprecated));
+                                    toType!, fromSource, toSource, isBreaking, null,
+                                    newlyDeprecated, newlyExperimental, noLongerExperimental));
                             }
                         }
                     }
@@ -178,13 +202,29 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         // A member that gains [Obsolete] keeps its signature, so the key-based passes below see no
         // change at all. Catch that transition separately — it is the migration signal.
         var deprecatedMembers = new List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)>();
+        var experimentalMembers = new List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)>();
+        var stabilizedMembers = new List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)>();
         foreach (var (key, fromMember) in fromByKey)
         {
-            if (toByKey.TryGetValue(key, out var toMember) &&
-                fromMember.ObsoleteMessage is null &&
-                toMember.ObsoleteMessage is not null)
+            if (!toByKey.TryGetValue(key, out var toMember))
+            {
+                continue;
+            }
+
+            if (fromMember.ObsoleteMessage is null && toMember.ObsoleteMessage is not null)
             {
                 deprecatedMembers.Add((fromMember, toMember));
+            }
+
+            if (fromMember.ExperimentalId is null && toMember.ExperimentalId is not null)
+            {
+                experimentalMembers.Add((fromMember, toMember));
+            }
+
+            // The common direction in practice: an API graduating to stable.
+            if (fromMember.ExperimentalId is not null && toMember.ExperimentalId is null)
+            {
+                stabilizedMembers.Add((fromMember, toMember));
             }
         }
 
@@ -206,7 +246,9 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             }
         }
 
-        if (addedMembers.Count == 0 && removedMembers.Count == 0 && deprecatedMembers.Count == 0)
+        if (addedMembers.Count == 0 && removedMembers.Count == 0 &&
+            deprecatedMembers.Count == 0 && experimentalMembers.Count == 0 &&
+            stabilizedMembers.Count == 0)
         {
             return null;
         }
@@ -238,12 +280,15 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         var pureAdded = addedMembers.Where((_, i) => !matchedAdded.Contains(i)).ToList();
 
         if (pureAdded.Count == 0 && pureRemoved.Count == 0 && changedMembers.Count == 0 &&
-            deprecatedMembers.Count == 0)
+            deprecatedMembers.Count == 0 && experimentalMembers.Count == 0 &&
+            stabilizedMembers.Count == 0)
         {
             return null;
         }
 
-        return new MemberChanges(pureAdded, pureRemoved, changedMembers, deprecatedMembers);
+        return new MemberChanges(
+            pureAdded, pureRemoved, changedMembers,
+            deprecatedMembers, experimentalMembers, stabilizedMembers);
     }
 
     /// <summary>
@@ -279,7 +324,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
     /// </summary>
     private static bool IsPurelyAdditive(ChangedType c, bool ignoreDocs)
     {
-        if (c.NewlyDeprecated is not null)
+        if (c.NewlyDeprecated is not null || c.NewlyExperimental is not null ||
+            c.NoLongerExperimental is not null)
         {
             return false;
         }
@@ -288,7 +334,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         if (c.Members is not null)
         {
             return c.Members.Removed.Count == 0 && c.Members.Changed.Count == 0 &&
-                c.Members.Deprecated.Count == 0;
+                c.Members.Deprecated.Count == 0 && c.Members.NowExperimental.Count == 0 &&
+                c.Members.NoLongerExperimental.Count == 0;
         }
 
         // Source-level diff: purely additive if no significant lines were deleted
@@ -439,6 +486,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                         fullName = c.Type.FullName,
                         isBreaking = c.IsBreaking,
                         newlyDeprecated = c.NewlyDeprecated,
+                        newlyExperimental = c.NewlyExperimental,
+                        noLongerExperimental = c.NoLongerExperimental,
                         addedMembers = c.Members.Added.Select(m => new { m.Kind, m.Name, m.Signature }),
                         removedMembers = c.Members.Removed.Select(m => new { m.Kind, m.Name, m.Signature }),
                         changedMembers = c.Members.Changed.Select(m => new
@@ -455,6 +504,20 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                             signature = m.To.Signature,
                             deprecationMessage = m.To.ObsoleteMessage,
                         }),
+                        experimentalMembers = c.Members.NowExperimental.Select(m => new
+                        {
+                            kind = m.To.Kind,
+                            name = m.To.Name,
+                            signature = m.To.Signature,
+                            experimentalId = m.To.ExperimentalId,
+                        }),
+                        stabilizedMembers = c.Members.NoLongerExperimental.Select(m => new
+                        {
+                            kind = m.To.Kind,
+                            name = m.To.Name,
+                            signature = m.To.Signature,
+                            wasExperimentalId = m.From.ExperimentalId,
+                        }),
                     }
                     : new
                     {
@@ -463,6 +526,8 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                         fullName = c.Type.FullName,
                         isBreaking = c.IsBreaking,
                         newlyDeprecated = c.NewlyDeprecated,
+                        newlyExperimental = c.NewlyExperimental,
+                        noLongerExperimental = c.NoLongerExperimental,
                         fromSource = c.FromSource,
                         toSource = c.ToSource,
                     }),
@@ -543,7 +608,12 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             foreach (var c in changed)
             {
                 var label = c.IsBreaking ? " ⚠" : "";
-                var deprecatedLabel = c.NewlyDeprecated is not null ? " ** now deprecated" : "";
+                // --type-only has no detail section, so the reason has to ride on the summary
+                // line; otherwise it would repeat what the detail block prints below.
+                var stability = FormatTransition(
+                    c.NewlyDeprecated, c.NewlyExperimental, c.NoLongerExperimental,
+                    withMessage: typeOnly);
+                var deprecatedLabel = stability.Length > 0 ? $" {stability}" : "";
                 Console.WriteLine($"  ~ [{c.Type.Kind}] {c.Type.FullName}{label}{deprecatedLabel}");
             }
             Console.WriteLine();
@@ -560,10 +630,12 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
                     Console.WriteLine($"=== {c.Type.FullName}{label} ===");
                     Console.WriteLine();
 
-                    if (c.NewlyDeprecated is not null)
+                    var typeStability = FormatTransition(
+                        c.NewlyDeprecated, c.NewlyExperimental, c.NoLongerExperimental,
+                        withMarker: false);
+                    if (typeStability.Length > 0)
                     {
-                        var reason = c.NewlyDeprecated.Length > 0 ? $": {c.NewlyDeprecated}" : "";
-                        Console.WriteLine($"  ! type is now deprecated{reason}");
+                        Console.WriteLine($"  ! type is {typeStability}");
                         Console.WriteLine();
                     }
 
@@ -594,6 +666,49 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         }
     }
 
+    /// <summary>
+    /// Renders a stability transition. Pass <paramref name="withMessage"/> false where a detail
+    /// block repeats the reason anyway.
+    /// </summary>
+    private static string FormatTransition(
+        string? newlyDeprecated,
+        string? newlyExperimental,
+        string? noLongerExperimental,
+        bool withMessage = true,
+        bool withMarker = true)
+    {
+        var parts = new List<string>();
+
+        if (newlyDeprecated is not null)
+        {
+            parts.Add(withMessage && newlyDeprecated.Length > 0
+                ? $"now deprecated: {newlyDeprecated}"
+                : "now deprecated");
+        }
+
+        if (newlyExperimental is not null)
+        {
+            parts.Add(withMessage && newlyExperimental.Length > 0
+                ? $"now experimental: {newlyExperimental}"
+                : "now experimental");
+        }
+
+        if (noLongerExperimental is not null)
+        {
+            parts.Add(withMessage && noLongerExperimental.Length > 0
+                ? $"no longer experimental (was {noLongerExperimental})"
+                : "no longer experimental");
+        }
+
+        if (parts.Count == 0)
+        {
+            return "";
+        }
+
+        var text = string.Join("; ", parts);
+        return withMarker ? $"{CommonOptions.StabilityMarker} {text}" : text;
+    }
+
     private static void OutputMemberDiff(MemberChanges members)
     {
         if (members.Removed.Count > 0)
@@ -622,13 +737,21 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
             }
         }
 
-        if (members.Deprecated.Count > 0)
+        var stabilityChanged = members.Deprecated
+            .Concat(members.NowExperimental)
+            .Concat(members.NoLongerExperimental)
+            .Distinct();
+
+        foreach (var (from, to) in stabilityChanged)
         {
-            foreach (var (_, to) in members.Deprecated)
-            {
-                var reason = to.ObsoleteMessage is { Length: > 0 } message ? $": {message}" : "";
-                Console.WriteLine($"  ! [{to.Kind}] {to.Signature}  // now deprecated{reason}");
-            }
+            // Report only what actually changed for this member, not its full current state.
+            var marker = FormatTransition(
+                from.ObsoleteMessage is null ? to.ObsoleteMessage : null,
+                from.ExperimentalId is null ? to.ExperimentalId : null,
+                to.ExperimentalId is null ? from.ExperimentalId : null,
+                withMarker: false);
+
+            Console.WriteLine($"  ! [{to.Kind}] {to.Signature}  // {marker}");
         }
     }
 
@@ -638,11 +761,15 @@ internal sealed class DiffCommandAction(DiffCommand command) : AsynchronousComma
         string ToSource,
         bool IsBreaking,
         MemberChanges? Members,
-        string? NewlyDeprecated = null);
+        string? NewlyDeprecated = null,
+        string? NewlyExperimental = null,
+        string? NoLongerExperimental = null);
 
     private sealed record MemberChanges(
         List<TypeInspector.MemberSignature> Added,
         List<TypeInspector.MemberSignature> Removed,
         List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> Changed,
-        List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> Deprecated);
+        List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> Deprecated,
+        List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> NowExperimental,
+        List<(TypeInspector.MemberSignature From, TypeInspector.MemberSignature To)> NoLongerExperimental);
 }

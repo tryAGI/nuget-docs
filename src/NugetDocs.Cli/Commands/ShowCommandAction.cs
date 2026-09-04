@@ -85,10 +85,8 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
                     }
                 }
 
-                source = FormatSignatures(
-                    inspector.ResolveTypeName(typeName),
-                    members,
-                    inspector.GetTypeObsoleteMessage(typeName));
+                var stability = inspector.GetTypeStability(typeName);
+                source = FormatSignatures(inspector.ResolveTypeName(typeName), members, stability);
             }
             else
             {
@@ -160,20 +158,17 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
     private static string FormatSignatures(
         string typeName,
         IReadOnlyList<TypeInspector.MemberSignature> members,
-        string? typeObsoleteMessage)
+        (string? ObsoleteMessage, string? ExperimentalId) typeStability)
     {
         var builder = new System.Text.StringBuilder();
         builder.Append("// Type: ").Append(typeName).AppendLine();
 
-        // A type-level [Obsolete] does not repeat on its members, so surface it in the header.
-        if (typeObsoleteMessage is not null)
+        // A type-level marker does not repeat on its members, so surface it in the header.
+        var typeMarker = CommonOptions.FormatStability(
+            typeStability.ObsoleteMessage, typeStability.ExperimentalId);
+        if (typeMarker.Length > 0)
         {
-            builder.Append("// ** deprecated");
-            if (typeObsoleteMessage.Length > 0)
-            {
-                builder.Append(": ").Append(typeObsoleteMessage);
-            }
-            builder.AppendLine();
+            builder.Append("// ").Append(typeMarker).AppendLine();
         }
 
         builder.Append("// Members: ").Append(members.Count).AppendLine();
@@ -184,9 +179,11 @@ internal sealed class ShowCommandAction(ShowCommand command) : AsynchronousComma
             kind: m => m.Kind,
             // The deprecation marker is the highest-value signal in a survey, so it rides inline
             // rather than being dropped with the rest of the attributes.
-            line: m => m.ObsoleteMessage is null
-                ? $"{m.Signature};"
-                : $"{m.Signature};  // ** deprecated{(m.ObsoleteMessage.Length > 0 ? $": {m.ObsoleteMessage}" : "")}",
+            line: m =>
+            {
+                var marker = CommonOptions.FormatStability(m.ObsoleteMessage, m.ExperimentalId);
+                return marker.Length > 0 ? $"{m.Signature};  // {marker}" : $"{m.Signature};";
+            },
             write: line => builder.AppendLine(line));
 
         return builder.ToString();
