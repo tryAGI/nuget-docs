@@ -174,6 +174,32 @@ internal static class CommonOptions
     }
 
     /// <summary>
+    /// Appends the stability marker after a name — <c>Foo ** deprecated</c>. For identifiers,
+    /// where the name must stay the leading, scannable token.
+    /// </summary>
+    public static string SuffixStability(string name, string? obsoleteMessage, string? experimentalId)
+    {
+        var marker = FormatStability(obsoleteMessage, experimentalId);
+        return marker.Length > 0 ? $"{name} {marker}" : name;
+    }
+
+    /// <summary>
+    /// Leads a free-form cell with the stability marker — <c>** deprecated: reason — summary</c>.
+    /// For prose columns, where the marker must not be buried at the end of a long sentence.
+    /// </summary>
+    public static string PrefixStability(string text, string? obsoleteMessage, string? experimentalId)
+    {
+        var marker = FormatStability(obsoleteMessage, experimentalId);
+
+        if (marker.Length == 0)
+        {
+            return text;
+        }
+
+        return text.Length > 0 ? $"{marker} — {text}" : marker;
+    }
+
+    /// <summary>
     /// True when an API carries any stability marker.
     /// </summary>
     public static bool IsMarked(string? obsoleteMessage, string? experimentalId)

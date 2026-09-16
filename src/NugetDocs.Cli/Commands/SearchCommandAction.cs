@@ -96,7 +96,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                 {
                     Kind = r.MemberKind is not null ? $"{r.Kind}.{r.MemberKind}" : r.Kind,
                     Name = r.Name,
-                    FullName = Decorate(r.FullName, r.ObsoleteMessage, r.ExperimentalId),
+                    FullName = CommonOptions.SuffixStability(r.FullName, r.ObsoleteMessage, r.ExperimentalId),
                 }).ToList();
 
                 var colKind = Math.Max("Kind".Length, rows.Count > 0 ? rows.Max(r => r.Kind.Length) : 0);
@@ -126,7 +126,7 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
                         : result.Kind;
 
                     Console.WriteLine(
-                        $"  [{kindLabel}] {Decorate(result.FullName, result.ObsoleteMessage, result.ExperimentalId)}");
+                        $"  [{kindLabel}] {CommonOptions.SuffixStability(result.FullName, result.ObsoleteMessage, result.ExperimentalId)}");
                 }
 
                 CommonOptions.WriteTruncationFooter(total, limit, NarrowHint);
@@ -141,12 +141,4 @@ internal sealed class SearchCommandAction(SearchCommand command) : AsynchronousC
         }
     }
 
-    /// <summary>
-    /// Appends the stability marker to a result's name, leaving unmarked names untouched.
-    /// </summary>
-    private static string Decorate(string name, string? obsoleteMessage, string? experimentalId)
-    {
-        var marker = CommonOptions.FormatStability(obsoleteMessage, experimentalId);
-        return marker.Length > 0 ? $"{name} {marker}" : name;
-    }
 }

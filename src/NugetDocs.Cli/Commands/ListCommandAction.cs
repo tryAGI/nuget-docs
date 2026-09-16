@@ -97,7 +97,8 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
                         ? $"{t.Name}<{new string(',', t.GenericParameterCount - 1)}>"
                         : t.Name,
                     Namespace = t.Namespace,
-                    Summary = Decorate(xmlDocs?.GetTypeSummary(t.FullName) ?? "", t.ObsoleteMessage, t.ExperimentalId),
+                    Summary = CommonOptions.PrefixStability(
+                        xmlDocs?.GetTypeSummary(t.FullName) ?? "", t.ObsoleteMessage, t.ExperimentalId),
                 }).ToList();
 
                 var colKind = Math.Max("Kind".Length, rows.Count > 0 ? rows.Max(r => r.Kind.Length) : 0);
@@ -128,12 +129,9 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
                             ? $"{t.Name}<{new string(',', t.GenericParameterCount - 1)}>"
                             : t.Name;
 
-                        var stability = CommonOptions.FormatStability(t.ObsoleteMessage, t.ExperimentalId);
-                        var marker = stability.Length > 0 ? $" {stability}" : "";
+                        var name = CommonOptions.SuffixStability(displayName, t.ObsoleteMessage, t.ExperimentalId);
                         var summary = xmlDocs?.GetTypeSummary(t.FullName);
-                        return summary is not null
-                            ? $"{displayName}{marker} — {summary}"
-                            : $"{displayName}{marker}";
+                        return summary is not null ? $"{name} — {summary}" : name;
                     },
                     write: Console.WriteLine,
                     order: GetKindOrder);
@@ -148,21 +146,6 @@ internal sealed class ListCommandAction(ListCommand command) : AsynchronousComma
             Console.Error.WriteLine($"Error: {ex.Message}");
             return 1;
         }
-    }
-
-    /// <summary>
-    /// Prefixes a free-form cell with the deprecation marker, keeping the table's column count.
-    /// </summary>
-    private static string Decorate(string summary, string? obsoleteMessage, string? experimentalId)
-    {
-        var marker = CommonOptions.FormatStability(obsoleteMessage, experimentalId);
-
-        if (marker.Length == 0)
-        {
-            return summary;
-        }
-
-        return summary.Length > 0 ? $"{marker} — {summary}" : marker;
     }
 
     private static int GetKindOrder(string kind) => kind switch

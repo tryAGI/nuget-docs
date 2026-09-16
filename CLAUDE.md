@@ -12,7 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build everything
 dotnet build nuget-docs.slnx
 
-# Run integration tests (142 tests, hits NuGet.org)
+# If the build hangs silently (empty log, MSBuild node idle for minutes, or MSB4166 "child node
+# exited prematurely"), the Roslyn compiler-server handshake is stuck on this machine — bypass it:
+dotnet build nuget-docs.slnx -m:1 -nodeReuse:false -p:UseSharedCompilation=false
+
+# Run integration tests (147 tests, hits NuGet.org)
 dotnet test src/NugetDocs.IntegrationTests/
 
 # Run a single test
@@ -83,7 +87,12 @@ state.
 
 Formatting lives in two places by design: `CommonOptions.FormatStability` describes **current**
 state (`list`, `search`, `show --signatures`), while `DiffCommandAction.FormatTransition` describes
-**changes** — they share only `CommonOptions.StabilityMarker`.
+**changes** — they share only `CommonOptions.StabilityMarker`. Placement is also centralized:
+`SuffixStability` trails an identifier (`Foo ** deprecated`, for names), `PrefixStability` leads a
+prose cell (`** deprecated: reason — summary`, for table summaries) — pick by what the column holds.
+
+`SearchTypes` reads a type's attributes once per type, not once per matching member — hoist any
+new per-type fact the same way rather than calling the `Get*` helpers inside the member loop.
 
 Measured on real packages: types gaining `[Experimental]` essentially never happens between
 released versions; **losing** it (graduating to stable) is the common case, so `diff` detects both
@@ -91,8 +100,11 @@ directions. Semantic Kernel 1.15.0 -> 1.30.0 stabilizes 9 `SKEXP0001` types.
 
 `diff` detects these transitions separately, since attaching or removing an attribute leaves the
 signature identical and the key-based member comparison sees nothing: `ChangedType` carries
-`NewlyDeprecated` / `NewlyExperimental` / `NoLongerExperimental`, and `MemberChanges` carries the
-matching `Deprecated` / `NowExperimental` / `NoLongerExperimental` lists. None is treated as
+`NewlyDeprecated` / `NewlyExperimental` / `NoLongerExperimental` / `NoLongerDeprecated`, and
+`MemberChanges` carries the matching `Deprecated` / `NowExperimental` / `NoLongerExperimental` /
+`NoLongerDeprecated` lists — both attributes, both directions. Un-deprecation never occurred in any
+real package span checked (Newtonsoft, SK, Azure.Identity, NUnit), so its test reverses a version
+pair (`--from 10.0.3 --to 9.0.1`) to drive the path with real data. None is treated as
 breaking (the code still compiles), but `IsPurelyAdditive` returns false for them so
 `--no-additive` keeps them. Because they are pure metadata, `--type-only` reports them without
 decompiling anything.

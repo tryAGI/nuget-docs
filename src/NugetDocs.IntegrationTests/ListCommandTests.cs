@@ -315,4 +315,15 @@ public class ListCommandTests
         output.Should().Contain("\"experimental\": true");
         output.Should().Contain("\"experimentalId\": \"MEAI001\"");
     }
+
+    [TestMethod]
+    public async Task List_TableLeadsSummaryWithMarker()
+    {
+        // The table's Summary column is prose, so the marker goes first where it is scannable.
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "list", "Newtonsoft.Json", "--deprecated", "--format", "table");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("** deprecated: JSON Schema validation");
+    }
 }

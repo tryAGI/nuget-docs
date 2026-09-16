@@ -315,16 +315,22 @@ internal sealed partial class TypeInspector : IDisposable
                 continue;
             }
 
+            // Type-level facts are the same for every member below, so read them once per type
+            // rather than re-walking the type's attribute list on each matching member.
+            var typeKind = GetTypeKind(type);
+            var typeObsolete = GetObsoleteMessage(type);
+            var typeExperimental = GetExperimentalId(type);
+
             // Match type name
             if (regex.IsMatch(type.Name) || regex.IsMatch(type.FullName))
             {
                 results.Add(new SearchResult(
-                    Kind: GetTypeKind(type),
+                    Kind: typeKind,
                     FullName: type.FullName,
                     Name: type.Name,
                     MemberKind: null,
-                    ObsoleteMessage: GetObsoleteMessage(type),
-                    ExperimentalId: GetExperimentalId(type)));
+                    ObsoleteMessage: typeObsolete,
+                    ExperimentalId: typeExperimental));
             }
 
             // Search members
@@ -339,13 +345,13 @@ internal sealed partial class TypeInspector : IDisposable
                 if (regex.IsMatch(member.Name))
                 {
                     results.Add(new SearchResult(
-                        Kind: GetTypeKind(type),
+                        Kind: typeKind,
                         FullName: $"{type.FullName}.{member.Name}",
                         Name: member.Name,
                         MemberKind: GetMemberKind(member),
                         // A member inherits the type's marker when it has none of its own.
-                        ObsoleteMessage: GetObsoleteMessage(member) ?? GetObsoleteMessage(type),
-                        ExperimentalId: GetExperimentalId(member) ?? GetExperimentalId(type)));
+                        ObsoleteMessage: GetObsoleteMessage(member) ?? typeObsolete,
+                        ExperimentalId: GetExperimentalId(member) ?? typeExperimental));
                 }
             }
         }

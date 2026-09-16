@@ -127,7 +127,9 @@ attribute leaves the signature untouched and would otherwise look like no change
 - `** now deprecated` — gained `[Obsolete]`
 - `** now experimental: MEAI001` — gained `[Experimental]`
 - `** no longer experimental (was SKEXP0001)` — **graduated to stable**, which is by far the most
-  common of the three in real packages
+  common of these in real packages
+- `** no longer deprecated (was: <reason>)` — `[Obsolete]` was removed; rare, but it means the API
+  is supported again
 
 These need no decompilation, so **`--type-only` reports them too** — that is the cheapest way to
 answer "what should I stop using before upgrading?". They are **not** counted as breaking changes

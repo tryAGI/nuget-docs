@@ -246,4 +246,39 @@ public class DiffCommandTests
         output.Should().Contain("** now deprecated\n");
         output.Should().Contain("! type is now deprecated: BSON");
     }
+
+    [TestMethod]
+    public async Task Diff_DetectsUnDeprecation()
+    {
+        // No real package un-deprecates anything across the spans checked, so exercise the path by
+        // reversing the pair: walking 10.0.3 -> 9.0.1, the Bson types and Binder lose [Obsolete].
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "10.0.3", "--to", "9.0.1", "--type-only");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("no longer deprecated (was: BSON");
+        output.Should().Contain("BsonReader");
+    }
+
+    [TestMethod]
+    public async Task Diff_DetectsUnDeprecatedMembers()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "10.0.3", "--to", "9.0.1", "--member-diff");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("// no longer deprecated (was: Binder is obsolete");
+    }
+
+    [TestMethod]
+    public async Task Diff_JsonReportsUnDeprecation()
+    {
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "diff", "Newtonsoft.Json", "--from", "10.0.3", "--to", "9.0.1", "--member-diff", "--json");
+
+        exitCode.Should().BeOneOf(0, 2);
+        output.Should().Contain("\"noLongerDeprecated\"");
+        output.Should().Contain("\"undeprecatedMembers\"");
+        output.Should().Contain("\"wasDeprecationMessage\"");
+    }
 }

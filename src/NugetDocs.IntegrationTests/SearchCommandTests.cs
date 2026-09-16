@@ -213,4 +213,15 @@ public class SearchCommandTests
         output.Should().Contain("\"deprecated\": true");
         output.Should().Contain("\"deprecationMessage\"");
     }
+
+    [TestMethod]
+    public async Task Search_TableAppendsMarkerToName()
+    {
+        // FullName is an identifier, so the marker trails it and the name stays the leading token.
+        var (exitCode, output, _) = await CliTestHelper.RunAsync(
+            "search", "Newtonsoft.Json", "*Binder*", "--deprecated", "--format", "table");
+
+        exitCode.Should().Be(0);
+        output.Should().Contain("JsonSerializerSettings.Binder ** deprecated");
+    }
 }
