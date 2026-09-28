@@ -22,7 +22,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="ICSharpCode.Decompiler" Version="11.0.0.9375" />
+        <PackageReference Include="ICSharpCode.Decompiler" Version="11.1.0.9782" />
         <PackageReference Include="System.CommandLine" Version="2.0.12" />
     </ItemGroup>
 
