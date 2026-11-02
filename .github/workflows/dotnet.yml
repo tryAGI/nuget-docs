@@ -18,8 +18,6 @@ jobs:
       generate-build-number: false
       conventional-commits-publish-conditions: false
       additional-test-arguments: '--logger GitHubActions'
-    secrets:
-      nuget-key: ${{ secrets.NUGET_KEY }}
 
   release:
     name: Release
@@ -36,3 +34,17 @@ jobs:
           --generate-notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  nuget-trusted-publish:
+    name: NuGet trusted publishing
+    needs: publish
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: tryAGI/workflows/.github/actions/nuget-publish@main
+        with:
+          user: havendv
+          artifact-pattern: nuget-packages-ubuntu-latest
